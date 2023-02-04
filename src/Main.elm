@@ -184,11 +184,8 @@ newObstacle : Canvas -> Config -> TimeElapsed -> Float -> Maybe Obstacle
 newObstacle canvas config t dt =
     let
         timeForNewObstacle =
-            Debug.log "Updated T" (truncate <| (t + dt) / config.obstacleCountThreshold)
-                - Debug.log "Prev T" (truncate <| t / config.obstacleCountThreshold)
-
-        debug =
-            Debug.log "Time for new obstacle " timeForNewObstacle
+            (truncate <| (t + dt) / config.obstacleSpawnFrequency)
+                - (truncate <| t / config.obstacleSpawnFrequency)
     in
     if timeForNewObstacle > 0 then
         Just <| Obstacle.init canvas.width
@@ -199,8 +196,7 @@ newObstacle canvas config t dt =
 
 checkCollision : Player -> List Obstacle -> Bool
 checkCollision player obstacles =
-    -- List.any (Obstacle.intersectsPlayer player.height) obstacles
-    False
+    List.any (Obstacle.intersectsPlayer player.height) obstacles
 
 
 processFrame : Model -> Float -> Model
