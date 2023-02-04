@@ -1,4 +1,4 @@
-module Obstacle exposing (Obstacle, init, update, view)
+module Obstacle exposing (Obstacle, atPlayer, init, intersectsPlayer, update, view)
 
 import Canvas exposing (Renderable)
 import Canvas.Settings as Settings
@@ -33,6 +33,24 @@ isObstacleOnscreen obstacle =
     obstacle.position + 25 >= 0
 
 
+atPlayer : Obstacle -> Bool
+atPlayer obstacle =
+    obstacle.position <= 60 && obstacle.position >= 25
+
+
+intersectsPlayer : Float -> Obstacle -> Bool
+intersectsPlayer playerPos obstacle =
+    atPlayer obstacle
+        && playerPos
+        >= -25
+
+
 view : Float -> Obstacle -> Renderable
 view canvasHeight obstacle =
-    Canvas.shapes [ Settings.fill Color.white ] [ Canvas.rect ( obstacle.position, (canvasHeight / 2) - 12.5 ) 25 25 ]
+    Canvas.group []
+        [ Canvas.shapes [ Settings.fill Color.white ] [ Canvas.rect ( obstacle.position, (canvasHeight / 2) - 12.5 ) 25 25 ]
+        , Canvas.shapes
+            [ Settings.fill Color.red ]
+            [ Canvas.circle ( obstacle.position + 7, canvasHeight / 2 - 3 ) 4
+            ]
+        ]
