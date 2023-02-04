@@ -4,6 +4,7 @@ module Config exposing (Config, default)
 type alias Config =
     { gravity : Float
     , obstacleCountThreshold : Int
+    , tempoIncrement : Float
     }
 
 
@@ -11,4 +12,5 @@ default : Config
 default =
     { gravity = 2
     , obstacleCountThreshold = 1200
+    , tempoIncrement = 0.0001
     }

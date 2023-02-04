@@ -77,6 +77,7 @@ type alias Model =
     , state : GameMode
     , config : Config
     , canvas : Canvas
+    , tempo : Float
     }
 
 
@@ -88,6 +89,7 @@ initialModel canvas =
     , state = Menu
     , config = Config.default
     , canvas = canvas
+    , tempo = 1.0
     }
 
 
@@ -202,10 +204,10 @@ processFrame : Model -> Float -> Model
 processFrame model deltaTime =
     let
         scaledDeltaTime =
-            deltaTime * 0.1
+            deltaTime * 0.1 * model.tempo
 
         increasedCounter =
-            model.obstacleCounter + deltaTime
+            model.obstacleCounter + (deltaTime * model.tempo)
 
         maybeNewObstacle =
             newObstacle model.canvas model.config increasedCounter
@@ -224,7 +226,7 @@ processFrame model deltaTime =
         newState =
             case model.state of
                 Playing n ->
-                    Playing (n + round scaledDeltaTime)
+                    Playing (n + round (1 + model.tempo))
 
                 _ ->
                     model.state
@@ -237,6 +239,7 @@ processFrame model deltaTime =
             | player = Player.update model.config scaledDeltaTime model.player
             , obstacles = newObstacles
             , state = newState
+            , tempo = model.tempo + model.config.tempoIncrement
             , obstacleCounter = updatedCounter
         }
 
