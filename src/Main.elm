@@ -1,4 +1,4 @@
-module Main exposing (Msg(..), main)
+port module Main exposing (Msg(..), main)
 
 import Browser
 import Browser.Events exposing (onAnimationFrameDelta, onKeyPress, onResize)
@@ -6,7 +6,7 @@ import Canvas exposing (..)
 import Canvas.Settings exposing (..)
 import Color
 import Config exposing (Config)
-import Html exposing (Html)
+import Html exposing (Html, audio)
 import Json.Decode as Decode exposing (Decoder)
 import Obstacle exposing (Obstacle)
 import Player exposing (Player)
@@ -137,43 +137,39 @@ update msg model =
             )
 
         Frame deltaTime ->
-            let
-                newModel =
-                    case model.state of
-                        Playing _ ->
-                            processFrame model (deltaTime * model.tempo)
+            case model.state of
+                Playing _ ->
+                    processFrame model (deltaTime * model.tempo)
 
-                        _ ->
-                            model
-            in
-            ( newModel, Cmd.none )
+                _ ->
+                    ( model, Cmd.none )
 
         KeyPress key ->
-            let
-                newModel =
-                    case model.state of
-                        Menu ->
-                            { model | state = Playing 0 }
+            case model.state of
+                Menu ->
+                    ( { model | state = Playing 0 }
+                    , audioMsg { message = "gameStarted", tempo = model.tempo }
+                    )
 
-                        Playing _ ->
-                            case key of
-                                Space ->
-                                    { model
-                                        | player =
-                                            Player.tryJump model.player
-                                    }
+                Playing _ ->
+                    case key of
+                        Space ->
+                            ( { model
+                                | player =
+                                    Player.tryJump model.player
+                              }
+                            , Cmd.none
+                            )
 
-                                _ ->
-                                    model
+                        _ ->
+                            ( model, Cmd.none )
 
-                        GameOver _ ->
-                            if key /= Space then
-                                initialModel model.canvas
+                GameOver _ ->
+                    if key /= Space then
+                        ( initialModel model.canvas, Cmd.none )
 
-                            else
-                                model
-            in
-            ( newModel, Cmd.none )
+                    else
+                        ( model, Cmd.none )
 
 
 
@@ -199,7 +195,7 @@ checkCollision player obstacles =
     List.any (Obstacle.intersectsPlayer player.height) obstacles
 
 
-processFrame : Model -> Float -> Model
+processFrame : Model -> Float -> ( Model, Cmd Msg )
 processFrame model deltaTime =
     let
         scaledDeltaTime =
@@ -226,15 +222,19 @@ processFrame model deltaTime =
                     model.state
     in
     if checkCollision model.player model.obstacles then
-        { model | state = GameOver (timeElapsed model.state) }
+        ( { model | state = GameOver (timeElapsed model.state) }
+        , audioMsg { message = "gameOver", tempo = model.tempo }
+        )
 
     else
-        { model
+        ( { model
             | player = Player.update model.config scaledDeltaTime model.player
             , obstacles = newObstacles
             , state = newState
             , tempo = model.tempo + model.config.tempoIncrement
-        }
+          }
+        , Cmd.none
+        )
 
 
 
@@ -330,6 +330,9 @@ viewScore point score =
 
 
 -- Program
+
+
+port audioMsg : { message : String, tempo : Float } -> Cmd msg
 
 
 subscriptions : Model -> Sub Msg
