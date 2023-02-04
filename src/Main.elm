@@ -16,18 +16,18 @@ import Player exposing (Player)
 -- GameMode & Score
 
 
-type alias Score =
-    Int
+type alias TimeElapsed =
+    Float
 
 
 type GameMode
     = Menu
-    | Playing Score
-    | GameOver Score
+    | Playing TimeElapsed
+    | GameOver TimeElapsed
 
 
-toScore : GameMode -> Score
-toScore gameMode =
+timeElapsed : GameMode -> TimeElapsed
+timeElapsed gameMode =
     case gameMode of
         Playing n ->
             n
@@ -73,7 +73,6 @@ fromString string =
 type alias Model =
     { player : Player
     , obstacles : List Obstacle
-    , obstacleCounter : Float
     , state : GameMode
     , config : Config
     , canvas : Canvas
@@ -84,8 +83,7 @@ type alias Model =
 initialModel : Canvas -> Model
 initialModel canvas =
     { player = Player.init
-    , obstacles = [ Obstacle (canvas.width - 50) ]
-    , obstacleCounter = 0
+    , obstacles = []
     , state = Menu
     , config = Config.default
     , canvas = canvas
@@ -143,7 +141,7 @@ update msg model =
                 newModel =
                     case model.state of
                         Playing _ ->
-                            processFrame model deltaTime
+                            processFrame model (deltaTime * model.tempo)
 
                         _ ->
                             model
@@ -182,13 +180,17 @@ update msg model =
 -- Helper Functions
 
 
-newObstacle : Canvas -> Config -> Float -> Maybe Obstacle
-newObstacle canvas config obstacleCounter =
+newObstacle : Canvas -> Config -> TimeElapsed -> Float -> Maybe Obstacle
+newObstacle canvas config t dt =
     let
         timeForNewObstacle =
-            obstacleCounter > toFloat config.obstacleCountThreshold
+            Debug.log "Updated T" (truncate <| (t + dt) / config.obstacleCountThreshold)
+                - Debug.log "Prev T" (truncate <| t / config.obstacleCountThreshold)
+
+        debug =
+            Debug.log "Time for new obstacle " timeForNewObstacle
     in
-    if timeForNewObstacle then
+    if timeForNewObstacle > 0 then
         Just <| Obstacle.init canvas.width
 
     else
@@ -197,25 +199,21 @@ newObstacle canvas config obstacleCounter =
 
 checkCollision : Player -> List Obstacle -> Bool
 checkCollision player obstacles =
-    List.any (Obstacle.intersectsPlayer player.height) obstacles
+    -- List.any (Obstacle.intersectsPlayer player.height) obstacles
+    False
 
 
 processFrame : Model -> Float -> Model
 processFrame model deltaTime =
     let
         scaledDeltaTime =
-            deltaTime * 0.1 * model.tempo
-
-        increasedCounter =
-            model.obstacleCounter + (deltaTime * model.tempo)
+            deltaTime * 0.1
 
         maybeNewObstacle =
-            newObstacle model.canvas model.config increasedCounter
-
-        updatedCounter =
-            increasedCounter
-                |> (modBy model.config.obstacleCountThreshold << round)
-                |> toFloat
+            newObstacle model.canvas
+                model.config
+                (timeElapsed model.state)
+                deltaTime
 
         newObstacles =
             maybeNewObstacle
@@ -226,13 +224,13 @@ processFrame model deltaTime =
         newState =
             case model.state of
                 Playing n ->
-                    Playing (n + round (1 + model.tempo))
+                    Playing (n + deltaTime)
 
                 _ ->
                     model.state
     in
     if checkCollision model.player model.obstacles then
-        { model | state = GameOver (toScore model.state) }
+        { model | state = GameOver (timeElapsed model.state) }
 
     else
         { model
@@ -240,7 +238,6 @@ processFrame model deltaTime =
             , obstacles = newObstacles
             , state = newState
             , tempo = model.tempo + model.config.tempoIncrement
-            , obstacleCounter = updatedCounter
         }
 
 
@@ -297,7 +294,7 @@ viewPlaying model =
     , Player.view
         canvas.height
         model.player
-    , viewScore ( canvas.width / 2, canvas.height / 2 - 40 ) (toScore model.state)
+    , viewScore ( canvas.width / 2, canvas.height / 2 - 40 ) (timeElapsed model.state)
     , Canvas.group [] <|
         List.map
             (Obstacle.view canvas.height)
@@ -317,7 +314,7 @@ viewGameOver model =
     , text [ stroke Color.white ]
         ( canvas.width / 2, canvas.height / 2 - 50 )
         "You died!"
-    , viewScore ( canvas.width / 2, canvas.height / 2 - 40 ) (toScore model.state)
+    , viewScore ( canvas.width / 2, canvas.height / 2 - 40 ) (timeElapsed model.state)
     , text [ stroke Color.white ]
         ( canvas.width / 2, canvas.height / 2 - 30 )
         "Press any non-space key to continue."
@@ -329,10 +326,10 @@ viewGameOver model =
     ]
 
 
-viewScore : Point -> Score -> Renderable
+viewScore : Point -> TimeElapsed -> Renderable
 viewScore point score =
     text [ stroke Color.white ] point <|
-        ("Score: " ++ String.fromInt score)
+        ("Score: " ++ String.fromInt (truncate ((score * score) * 0.5)))
 
 
 
