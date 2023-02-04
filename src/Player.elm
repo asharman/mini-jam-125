@@ -30,7 +30,7 @@ update : Config -> Float -> Player -> Player
 update config deltaTime player =
     let
         newHeight =
-            min 0 <| player.height + (player.velocity * deltaTime)
+            max -150 (min 0 <| player.height + (player.velocity * deltaTime))
     in
     { height = newHeight
     , velocity = player.velocity + config.gravity
