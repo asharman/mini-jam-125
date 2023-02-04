@@ -35,7 +35,7 @@ isObstacleOnscreen obstacle =
 
 atPlayer : Obstacle -> Bool
 atPlayer obstacle =
-    obstacle.position <= 75 && obstacle.position >= 25
+    obstacle.position <= 60 && obstacle.position >= 25
 
 
 intersectsPlayer : Float -> Obstacle -> Bool

@@ -189,13 +189,13 @@ update msg model =
 
                         GameOver _ ->
                             if key /= Space then
-                                { model | state = Menu }
-
-                            else
                                 initialModel
                                     ( model.width
                                     , model.height
                                     )
+
+                            else
+                                model
             in
             ( newModel, Cmd.none )
 
