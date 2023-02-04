@@ -12,5 +12,5 @@ default : Config
 default =
     { gravity = 2
     , obstacleSpawnFrequency = 1000
-    , tempoIncrement = 0.0001
+    , tempoIncrement = 0.0005
     }
