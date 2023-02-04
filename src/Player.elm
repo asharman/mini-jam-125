@@ -3,6 +3,7 @@ module Player exposing (..)
 import Canvas exposing (Renderable)
 import Canvas.Settings as Settings
 import Color
+import Config exposing (Config)
 
 
 type alias Player =
@@ -17,11 +18,6 @@ type PlayerState
     | Jumping
 
 
-gravity : number
-gravity =
-    2
-
-
 init : Player
 init =
     { height = 0
@@ -30,14 +26,14 @@ init =
     }
 
 
-update : Float -> Player -> Player
-update deltaTime player =
+update : Config -> Float -> Player -> Player
+update config deltaTime player =
     let
         newHeight =
             min 0 <| player.height + (player.velocity * deltaTime)
     in
     { height = newHeight
-    , velocity = player.velocity + gravity
+    , velocity = player.velocity + config.gravity
     , state =
         if newHeight == 0 then
             Running
