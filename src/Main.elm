@@ -15,6 +15,8 @@ type alias Model =
     { width : Float
     , height : Float
     , player : Player
+    , obstacles : List Obstacle
+    , obstacleCounter : Float
     }
 
 
@@ -22,6 +24,11 @@ type alias Player =
     { height : Float
     , velocity : Float
     , state : PlayerState
+    }
+
+
+type alias Obstacle =
+    { position : Float
     }
 
 
@@ -62,7 +69,7 @@ initialPlayer =
 
 init : ( Float, Float ) -> ( Model, Cmd Msg )
 init ( width, height ) =
-    ( Model width height initialPlayer, Cmd.none )
+    ( Model width height initialPlayer [ Obstacle (width - 50) ] 0, Cmd.none )
 
 
 view : Model -> Html Msg
@@ -71,7 +78,14 @@ view model =
         []
         [ Canvas.clear ( 0, 0 ) model.width model.height
         , shapes [ fill Color.black ] [ rect ( 0, 0 ) model.width model.height ]
-        , shapes [ fill Color.white ] [ Canvas.circle ( 50, (model.height / 2) + model.player.height ) 10 ]
+        , shapes [ fill Color.white ]
+            [ Canvas.circle
+                ( 50
+                , (model.height / 2) + model.player.height
+                )
+                10
+            ]
+        , shapes [ fill Color.white ] <| List.map (\obstacle -> rect ( obstacle.position, (model.height / 2) - 12.5 ) 25 25) model.obstacles
         ]
 
 
@@ -103,8 +117,30 @@ update msg model =
             let
                 scaledDeltaTime =
                     deltaTime * 0.1
+
+                spawnNewObstacle =
+                    model.obstacleCounter > 600
+
+                movedObstacles =
+                    model.obstacles
+                        |> List.map (\obstacle -> { obstacle | position = obstacle.position - scaledDeltaTime * 5 })
+                        |> List.filter isObstacleOnscreen
+
+                obstacles =
+                    if spawnNewObstacle then
+                        Obstacle model.width :: movedObstacles
+
+                    else
+                        movedObstacles
+
+                newObstacleCounter =
+                    if spawnNewObstacle then
+                        toFloat (modBy 600 (round model.obstacleCounter) + round deltaTime)
+
+                    else
+                        model.obstacleCounter + deltaTime
             in
-            ( { model | player = updatePlayer model.player scaledDeltaTime }, Cmd.none )
+            ( { model | player = updatePlayer model.player scaledDeltaTime, obstacles = obstacles, obstacleCounter = newObstacleCounter }, Cmd.none )
 
         KeyPress key ->
             let
@@ -120,6 +156,11 @@ update msg model =
 
             else
                 ( model, Cmd.none )
+
+
+isObstacleOnscreen : Obstacle -> Bool
+isObstacleOnscreen obstacle =
+    obstacle.position + 25 >= 0
 
 
 main : Program ( Float, Float ) Model Msg
