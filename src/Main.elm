@@ -4,11 +4,11 @@ import Browser
 import Browser.Events exposing (onAnimationFrameDelta, onKeyPress, onResize)
 import Canvas exposing (..)
 import Canvas.Settings exposing (..)
-import Canvas.Settings.Advanced exposing (scale)
 import Color
 import Html exposing (Html)
 import Json.Decode as Decode
-import Vector exposing (Vector)
+import Obstacle exposing (Obstacle)
+import Player exposing (Player)
 
 
 type alias Model =
@@ -20,56 +20,9 @@ type alias Model =
     }
 
 
-type alias Player =
-    { height : Float
-    , velocity : Float
-    , state : PlayerState
-    }
-
-
-type alias Obstacle =
-    { position : Float
-    }
-
-
-type PlayerState
-    = Running
-    | Jumping
-
-
-gravity : number
-gravity =
-    2
-
-
-updatePlayer : Player -> Float -> Player
-updatePlayer player deltaTime =
-    let
-        newHeight =
-            min 0 <| player.height + (player.velocity * deltaTime)
-    in
-    { height = newHeight
-    , velocity = player.velocity + gravity
-    , state =
-        if newHeight == 0 then
-            Running
-
-        else
-            Jumping
-    }
-
-
-initialPlayer : Player
-initialPlayer =
-    { height = 0
-    , velocity = 0
-    , state = Running
-    }
-
-
 init : ( Float, Float ) -> ( Model, Cmd Msg )
 init ( width, height ) =
-    ( Model width height initialPlayer [ Obstacle (width - 50) ] 0, Cmd.none )
+    ( Model width height Player.init [ Obstacle (width - 50) ] 0, Cmd.none )
 
 
 view : Model -> Html Msg
@@ -78,14 +31,8 @@ view model =
         []
         [ Canvas.clear ( 0, 0 ) model.width model.height
         , shapes [ fill Color.black ] [ rect ( 0, 0 ) model.width model.height ]
-        , shapes [ fill Color.white ]
-            [ Canvas.circle
-                ( 50
-                , (model.height / 2) + model.player.height
-                )
-                10
-            ]
-        , shapes [ fill Color.white ] <| List.map (\obstacle -> rect ( obstacle.position, (model.height / 2) - 12.5 ) 25 25) model.obstacles
+        , Player.view model.height model.player
+        , Canvas.group [] <| List.map (Obstacle.view model.height) model.obstacles
         ]
 
 
@@ -118,38 +65,33 @@ update msg model =
                 scaledDeltaTime =
                     deltaTime * 0.1
 
-                spawnNewObstacle =
-                    model.obstacleCounter > 600
+                maybeNewObstacle =
+                    newObstacle model deltaTime
 
-                movedObstacles =
-                    model.obstacles
-                        |> List.map (\obstacle -> { obstacle | position = obstacle.position - scaledDeltaTime * 5 })
-                        |> List.filter isObstacleOnscreen
+                updatedCounter =
+                    case maybeNewObstacle of
+                        Just _ ->
+                            toFloat (modBy 600 (round model.obstacleCounter) + round deltaTime)
+
+                        Nothing ->
+                            model.obstacleCounter + deltaTime
 
                 obstacles =
-                    if spawnNewObstacle then
-                        Obstacle model.width :: movedObstacles
-
-                    else
-                        movedObstacles
-
-                newObstacleCounter =
-                    if spawnNewObstacle then
-                        toFloat (modBy 600 (round model.obstacleCounter) + round deltaTime)
-
-                    else
-                        model.obstacleCounter + deltaTime
+                    maybeNewObstacle
+                        |> Maybe.map (\o -> o :: model.obstacles)
+                        |> Maybe.withDefault model.obstacles
+                        |> List.filterMap (Obstacle.update scaledDeltaTime)
             in
-            ( { model | player = updatePlayer model.player scaledDeltaTime, obstacles = obstacles, obstacleCounter = newObstacleCounter }, Cmd.none )
+            ( { model | player = Player.update scaledDeltaTime model.player, obstacles = obstacles, obstacleCounter = updatedCounter }, Cmd.none )
 
         KeyPress key ->
             let
                 player =
                     model.player
             in
-            if key == " " && player.state == Running then
+            if key == " " && player.state == Player.Running then
                 ( { model
-                    | player = { player | velocity = -15, state = Jumping }
+                    | player = { player | velocity = -15, state = Player.Jumping }
                   }
                 , Cmd.none
                 )
@@ -158,9 +100,13 @@ update msg model =
                 ( model, Cmd.none )
 
 
-isObstacleOnscreen : Obstacle -> Bool
-isObstacleOnscreen obstacle =
-    obstacle.position + 25 >= 0
+newObstacle : Model -> Float -> Maybe Obstacle
+newObstacle model deltaTime =
+    if (model.obstacleCounter + deltaTime) > 600 then
+        Just <| Obstacle.init model.width
+
+    else
+        Nothing
 
 
 main : Program ( Float, Float ) Model Msg
