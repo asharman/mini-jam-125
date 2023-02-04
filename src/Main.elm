@@ -12,6 +12,10 @@ import Obstacle exposing (Obstacle)
 import Player exposing (Player)
 
 
+
+-- GameMode & Score
+
+
 type alias Score =
     Int
 
@@ -35,8 +39,35 @@ toScore gameMode =
             0
 
 
+
+-- Canvas
+
+
 type alias Canvas =
     { width : Float, height : Float }
+
+
+
+-- Key
+
+
+type Key
+    = Space
+    | Other
+
+
+fromString : String -> Key
+fromString string =
+    case String.toLower string of
+        " " ->
+            Space
+
+        _ ->
+            Other
+
+
+
+-- Model
 
 
 type alias Model =
@@ -58,6 +89,16 @@ initialModel canvas =
     , config = Config.default
     , canvas = canvas
     }
+
+
+
+-- Msg, Init, Update
+
+
+type Msg
+    = Frame Float
+    | BrowserResized Int Int
+    | KeyPress Key
 
 
 init : Decode.Value -> ( Model, Cmd Msg )
@@ -85,6 +126,123 @@ init flags =
                 |> Result.withDefault defaultCanvas
     in
     ( initialModel initialCanvas, Cmd.none )
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+    case msg of
+        BrowserResized w h ->
+            ( { model | canvas = { width = toFloat w, height = toFloat h } }
+            , Cmd.none
+            )
+
+        Frame deltaTime ->
+            let
+                newModel =
+                    case model.state of
+                        Playing _ ->
+                            processFrame model deltaTime
+
+                        _ ->
+                            model
+            in
+            ( newModel, Cmd.none )
+
+        KeyPress key ->
+            let
+                newModel =
+                    case model.state of
+                        Menu ->
+                            { model | state = Playing 0 }
+
+                        Playing _ ->
+                            case key of
+                                Space ->
+                                    { model
+                                        | player =
+                                            Player.tryJump model.player
+                                    }
+
+                                _ ->
+                                    model
+
+                        GameOver _ ->
+                            if key /= Space then
+                                initialModel model.canvas
+
+                            else
+                                model
+            in
+            ( newModel, Cmd.none )
+
+
+
+-- Helper Functions
+
+
+newObstacle : Canvas -> Config -> Float -> Maybe Obstacle
+newObstacle canvas config obstacleCounter =
+    let
+        timeForNewObstacle =
+            obstacleCounter > toFloat config.obstacleCountThreshold
+    in
+    if timeForNewObstacle then
+        Just <| Obstacle.init canvas.width
+
+    else
+        Nothing
+
+
+checkCollision : Player -> List Obstacle -> Bool
+checkCollision player obstacles =
+    List.any (Obstacle.intersectsPlayer player.height) obstacles
+
+
+processFrame : Model -> Float -> Model
+processFrame model deltaTime =
+    let
+        scaledDeltaTime =
+            deltaTime * 0.1
+
+        increasedCounter =
+            model.obstacleCounter + deltaTime
+
+        maybeNewObstacle =
+            newObstacle model.canvas model.config increasedCounter
+
+        updatedCounter =
+            increasedCounter
+                |> (modBy model.config.obstacleCountThreshold << round)
+                |> toFloat
+
+        newObstacles =
+            maybeNewObstacle
+                |> Maybe.map (\o -> o :: model.obstacles)
+                |> Maybe.withDefault model.obstacles
+                |> List.filterMap (Obstacle.update scaledDeltaTime)
+
+        newState =
+            case model.state of
+                Playing n ->
+                    Playing (n + round scaledDeltaTime)
+
+                _ ->
+                    model.state
+    in
+    if checkCollision model.player model.obstacles then
+        { model | state = GameOver (toScore model.state) }
+
+    else
+        { model
+            | player = Player.update model.config scaledDeltaTime model.player
+            , obstacles = newObstacles
+            , state = newState
+            , obstacleCounter = updatedCounter
+        }
+
+
+
+-- View Code
 
 
 view : Model -> Html Msg
@@ -168,129 +326,14 @@ viewGameOver model =
     ]
 
 
-
-{- Displays the score as text -}
-
-
 viewScore : Point -> Score -> Renderable
 viewScore point score =
     text [ stroke Color.white ] point <|
         ("Score: " ++ String.fromInt score)
 
 
-type Msg
-    = Frame Float
-    | BrowserResized Int Int
-    | KeyPress Key
 
-
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
-    case msg of
-        BrowserResized w h ->
-            ( { model | canvas = { width = toFloat w, height = toFloat h } }
-            , Cmd.none
-            )
-
-        Frame deltaTime ->
-            let
-                newModel =
-                    case model.state of
-                        Playing _ ->
-                            processFrame model deltaTime
-
-                        _ ->
-                            model
-            in
-            ( newModel, Cmd.none )
-
-        KeyPress key ->
-            let
-                newModel =
-                    case model.state of
-                        Menu ->
-                            { model | state = Playing 0 }
-
-                        Playing _ ->
-                            case key of
-                                Space ->
-                                    { model
-                                        | player =
-                                            Player.tryJump model.player
-                                    }
-
-                                _ ->
-                                    model
-
-                        GameOver _ ->
-                            if key /= Space then
-                                initialModel model.canvas
-
-                            else
-                                model
-            in
-            ( newModel, Cmd.none )
-
-
-processFrame : Model -> Float -> Model
-processFrame model deltaTime =
-    let
-        scaledDeltaTime =
-            deltaTime * 0.1
-
-        increasedCounter =
-            model.obstacleCounter + deltaTime
-
-        maybeNewObstacle =
-            newObstacle model.canvas model.config increasedCounter
-
-        updatedCounter =
-            increasedCounter
-                |> (modBy model.config.obstacleCountThreshold << round)
-                |> toFloat
-
-        newObstacles =
-            maybeNewObstacle
-                |> Maybe.map (\o -> o :: model.obstacles)
-                |> Maybe.withDefault model.obstacles
-                |> List.filterMap (Obstacle.update scaledDeltaTime)
-
-        newState =
-            case model.state of
-                Playing n ->
-                    Playing (n + round scaledDeltaTime)
-
-                _ ->
-                    model.state
-    in
-    if checkCollision model.player model.obstacles then
-        { model | state = GameOver (toScore model.state) }
-
-    else
-        { model
-            | player = Player.update model.config scaledDeltaTime model.player
-            , obstacles = newObstacles
-            , state = newState
-            , obstacleCounter = updatedCounter
-        }
-
-
-newObstacle : Canvas -> Config -> Float -> Maybe Obstacle
-newObstacle canvas config obstacleCounter =
-    let
-        timeForNewObstacle =
-            obstacleCounter > toFloat config.obstacleCountThreshold
-    in
-    if timeForNewObstacle then
-        Just <| Obstacle.init canvas.width
-
-    else
-        Nothing
-
-
-checkCollision : Player -> List Obstacle -> Bool
-checkCollision player obstacles =
-    List.any (Obstacle.intersectsPlayer player.height) obstacles
+-- Program
 
 
 subscriptions : Model -> Sub Msg
@@ -301,21 +344,6 @@ subscriptions _ =
         , onKeyPress
             (Decode.map (KeyPress << fromString) (Decode.field "key" Decode.string))
         ]
-
-
-type Key
-    = Space
-    | Other
-
-
-fromString : String -> Key
-fromString string =
-    case String.toLower string of
-        " " ->
-            Space
-
-        _ ->
-            Other
 
 
 main : Program Decode.Value Model Msg
