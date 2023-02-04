@@ -5,6 +5,7 @@ import Browser.Events exposing (onAnimationFrameDelta, onKeyPress, onResize)
 import Canvas exposing (..)
 import Canvas.Settings exposing (..)
 import Color
+import Config exposing (Config)
 import Html exposing (Html)
 import Json.Decode as Decode
 import Obstacle exposing (Obstacle)
@@ -24,17 +25,20 @@ type alias Model =
     , obstacles : List Obstacle
     , obstacleCounter : Float
     , state : GameMode
+    , config : Config
     }
 
 
 initialModel : ( Float, Float ) -> Model
 initialModel ( width, height ) =
-    Model width
-        height
-        Player.init
-        [ Obstacle (width - 50) ]
-        0
-        Menu
+    { width = width
+    , height = height
+    , player = Player.init
+    , obstacles = [ Obstacle (width - 50) ]
+    , obstacleCounter = 0
+    , state = Menu
+    , config = Config.default
+    }
 
 
 getScore : Model -> Int
@@ -211,7 +215,7 @@ processFrame model deltaTime =
 
         updatedCounter =
             toFloat
-                (modBy 1200
+                (modBy model.config.obstacleCountThreshold
                     (round model.obstacleCounter)
                     + round deltaTime
                 )
@@ -235,7 +239,7 @@ processFrame model deltaTime =
 
     else
         { model
-            | player = Player.update scaledDeltaTime model.player
+            | player = Player.update model.config scaledDeltaTime model.player
             , obstacles = newObstacles
             , state = newState
             , obstacleCounter = updatedCounter
@@ -244,7 +248,7 @@ processFrame model deltaTime =
 
 newObstacle : Model -> Float -> Maybe Obstacle
 newObstacle model deltaTime =
-    if (model.obstacleCounter + deltaTime) > 1200 then
+    if (model.obstacleCounter + deltaTime) > toFloat model.config.obstacleCountThreshold then
         Just <| Obstacle.init model.width
 
     else
