@@ -9,4 +9,6 @@ type alias Config =
 
 default : Config
 default =
-    Config 2 1200
+    { gravity = 2
+    , obstacleCountThreshold = 1200
+    }

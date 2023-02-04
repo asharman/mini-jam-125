@@ -7,43 +7,24 @@ import Canvas.Settings exposing (..)
 import Color
 import Config exposing (Config)
 import Html exposing (Html)
-import Json.Decode as Decode
+import Json.Decode as Decode exposing (Decoder)
 import Obstacle exposing (Obstacle)
 import Player exposing (Player)
 
 
+type alias Score =
+    Int
+
+
 type GameMode
     = Menu
-    | Playing Int
-    | GameOver Int
+    | Playing Score
+    | GameOver Score
 
 
-type alias Model =
-    { width : Float
-    , height : Float
-    , player : Player
-    , obstacles : List Obstacle
-    , obstacleCounter : Float
-    , state : GameMode
-    , config : Config
-    }
-
-
-initialModel : ( Float, Float ) -> Model
-initialModel ( width, height ) =
-    { width = width
-    , height = height
-    , player = Player.init
-    , obstacles = [ Obstacle (width - 50) ]
-    , obstacleCounter = 0
-    , state = Menu
-    , config = Config.default
-    }
-
-
-getScore : Model -> Int
-getScore model =
-    case model.state of
+toScore : GameMode -> Score
+toScore gameMode =
+    case gameMode of
         Playing n ->
             n
 
@@ -54,14 +35,61 @@ getScore model =
             0
 
 
-init : ( Float, Float ) -> ( Model, Cmd Msg )
-init screenSize =
-    ( initialModel screenSize, Cmd.none )
+type alias Canvas =
+    { width : Float, height : Float }
+
+
+type alias Model =
+    { player : Player
+    , obstacles : List Obstacle
+    , obstacleCounter : Float
+    , state : GameMode
+    , config : Config
+    , canvas : Canvas
+    }
+
+
+initialModel : Canvas -> Model
+initialModel canvas =
+    { player = Player.init
+    , obstacles = [ Obstacle (canvas.width - 50) ]
+    , obstacleCounter = 0
+    , state = Menu
+    , config = Config.default
+    , canvas = canvas
+    }
+
+
+init : Decode.Value -> ( Model, Cmd Msg )
+init flags =
+    let
+        defaultCanvas : Canvas
+        defaultCanvas =
+            { width = 1000, height = 1000 }
+
+        canvasDecoder : Decoder Canvas
+        canvasDecoder =
+            Decode.list Decode.float
+                |> Decode.andThen
+                    (\twoElementList ->
+                        case twoElementList of
+                            w :: h :: _ ->
+                                Decode.succeed { width = w, height = h }
+
+                            _ ->
+                                Decode.fail ""
+                    )
+
+        initialCanvas =
+            Decode.decodeValue canvasDecoder flags
+                |> Result.withDefault defaultCanvas
+    in
+    ( initialModel initialCanvas, Cmd.none )
 
 
 view : Model -> Html Msg
 view model =
-    Canvas.toHtml ( round model.width, round model.height )
+    Canvas.toHtml ( round model.canvas.width, round model.canvas.height )
         []
     <|
         case model.state of
@@ -77,64 +105,77 @@ view model =
 
 viewMenu : Model -> List Renderable
 viewMenu model =
-    [ Canvas.clear ( 0, 0 ) model.width model.height
+    let
+        canvas =
+            model.canvas
+    in
+    [ Canvas.clear ( 0, 0 ) canvas.width canvas.height
     , shapes [ fill Color.black ]
-        [ rect ( 0, 0 ) model.width model.height ]
+        [ rect ( 0, 0 ) canvas.width canvas.height ]
     , text [ stroke Color.white ]
-        ( model.width / 2, model.height / 2 - 50 )
+        ( canvas.width / 2, canvas.height / 2 - 50 )
         "Dodge the Blocks!"
     , text [ stroke Color.white ]
-        ( model.width / 2, model.height / 2 - 30 )
+        ( canvas.width / 2, canvas.height / 2 - 30 )
         "Press any key to play."
-    , Player.view model.height model.player
+    , Player.view canvas.height model.player
     , Canvas.group [] <|
-        List.map (Obstacle.view model.height) model.obstacles
+        List.map (Obstacle.view canvas.height) model.obstacles
     ]
 
 
 viewPlaying : Model -> List Renderable
 viewPlaying model =
-    [ Canvas.clear ( 0, 0 ) model.width model.height
+    let
+        canvas =
+            model.canvas
+    in
+    [ Canvas.clear ( 0, 0 ) canvas.width canvas.height
     , shapes [ fill Color.black ]
-        [ rect ( 0, 0 ) model.width model.height ]
+        [ rect ( 0, 0 ) canvas.width canvas.height ]
     , Player.view
-        model.height
+        canvas.height
         model.player
-    , viewScore model
+    , viewScore ( canvas.width / 2, canvas.height / 2 - 40 ) (toScore model.state)
     , Canvas.group [] <|
         List.map
-            (Obstacle.view model.height)
+            (Obstacle.view canvas.height)
             model.obstacles
     ]
 
 
 viewGameOver : Model -> List Renderable
 viewGameOver model =
-    [ Canvas.clear ( 0, 0 ) model.width model.height
+    let
+        canvas =
+            model.canvas
+    in
+    [ Canvas.clear ( 0, 0 ) canvas.width canvas.height
     , shapes [ fill Color.black ]
-        [ rect ( 0, 0 ) model.width model.height ]
+        [ rect ( 0, 0 ) canvas.width canvas.height ]
     , text [ stroke Color.white ]
-        ( model.width / 2, model.height / 2 - 50 )
+        ( canvas.width / 2, canvas.height / 2 - 50 )
         "You died!"
-    , viewScore model
+    , viewScore ( canvas.width / 2, canvas.height / 2 - 40 ) (toScore model.state)
     , text [ stroke Color.white ]
-        ( model.width / 2, model.height / 2 - 30 )
+        ( canvas.width / 2, canvas.height / 2 - 30 )
         "Press any non-space key to continue."
-    , Player.view model.height model.player
+    , Player.view canvas.height model.player
     , Canvas.group [] <|
         List.map
-            (Obstacle.view model.height)
+            (Obstacle.view canvas.height)
             model.obstacles
     ]
 
 
-viewScore : Model -> Renderable
-viewScore model =
-    text [ stroke Color.white ]
-        ( model.width / 2, model.height / 2 - 40 )
-        ("Score: "
-            ++ String.fromInt (getScore model)
-        )
+
+{- Displays the score as text -}
+
+
+viewScore : Point -> Score -> Renderable
+viewScore point score =
+    text [ stroke Color.white ] point <|
+        ("Score: " ++ String.fromInt score)
 
 
 type Msg
@@ -147,17 +188,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         BrowserResized w h ->
-            let
-                width =
-                    toFloat w
-
-                height =
-                    toFloat h
-            in
-            ( { model
-                | width = width
-                , height = height
-              }
+            ( { model | canvas = { width = toFloat w, height = toFloat h } }
             , Cmd.none
             )
 
@@ -193,10 +224,7 @@ update msg model =
 
                         GameOver _ ->
                             if key /= Space then
-                                initialModel
-                                    ( model.width
-                                    , model.height
-                                    )
+                                initialModel model.canvas
 
                             else
                                 model
@@ -210,15 +238,16 @@ processFrame model deltaTime =
         scaledDeltaTime =
             deltaTime * 0.1
 
+        increasedCounter =
+            model.obstacleCounter + deltaTime
+
         maybeNewObstacle =
-            newObstacle model deltaTime
+            newObstacle model.canvas model.config increasedCounter
 
         updatedCounter =
-            toFloat
-                (modBy model.config.obstacleCountThreshold
-                    (round model.obstacleCounter)
-                    + round deltaTime
-                )
+            increasedCounter
+                |> (modBy model.config.obstacleCountThreshold << round)
+                |> toFloat
 
         newObstacles =
             maybeNewObstacle
@@ -234,8 +263,8 @@ processFrame model deltaTime =
                 _ ->
                     model.state
     in
-    if checkCollision model then
-        { model | state = GameOver (getScore model) }
+    if checkCollision model.player model.obstacles then
+        { model | state = GameOver (toScore model.state) }
 
     else
         { model
@@ -246,18 +275,22 @@ processFrame model deltaTime =
         }
 
 
-newObstacle : Model -> Float -> Maybe Obstacle
-newObstacle model deltaTime =
-    if (model.obstacleCounter + deltaTime) > toFloat model.config.obstacleCountThreshold then
-        Just <| Obstacle.init model.width
+newObstacle : Canvas -> Config -> Float -> Maybe Obstacle
+newObstacle canvas config obstacleCounter =
+    let
+        timeForNewObstacle =
+            obstacleCounter > toFloat config.obstacleCountThreshold
+    in
+    if timeForNewObstacle then
+        Just <| Obstacle.init canvas.width
 
     else
         Nothing
 
 
-checkCollision : Model -> Bool
-checkCollision model =
-    List.any (Obstacle.intersectsPlayer model.player.height) model.obstacles
+checkCollision : Player -> List Obstacle -> Bool
+checkCollision player obstacles =
+    List.any (Obstacle.intersectsPlayer player.height) obstacles
 
 
 subscriptions : Model -> Sub Msg
@@ -266,7 +299,7 @@ subscriptions _ =
         [ onAnimationFrameDelta Frame
         , onResize BrowserResized
         , onKeyPress
-            (Decode.map toKeyPress (Decode.field "key" Decode.string))
+            (Decode.map (KeyPress << fromString) (Decode.field "key" Decode.string))
         ]
 
 
@@ -275,17 +308,17 @@ type Key
     | Other
 
 
-toKeyPress : String -> Msg
-toKeyPress keyEvent =
-    case String.toLower keyEvent of
+fromString : String -> Key
+fromString string =
+    case String.toLower string of
         " " ->
-            KeyPress Space
+            Space
 
         _ ->
-            KeyPress Other
+            Other
 
 
-main : Program ( Float, Float ) Model Msg
+main : Program Decode.Value Model Msg
 main =
     Browser.element
         { init = init
