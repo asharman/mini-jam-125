@@ -53,7 +53,12 @@ randomObstacle id point =
     Random.map3 init
         (Random.constant id)
         (Random.constant point)
-        (Random.uniform Rest [ TempoIncrease, TempoDecrease ])
+        (Random.weighted
+            ( 1, Rest )
+            [ ( 3, TempoIncrease )
+            , ( 3, TempoDecrease )
+            ]
+        )
 
 
 hitbox : Point -> Float -> Float -> Hitbox
