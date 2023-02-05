@@ -12,17 +12,20 @@ const app = Elm.Main.init({
   flags: [window.innerWidth, window.innerHeight],
 });
 
+const synth = initializeGameSynth()
+
 app.ports.audioMsg.subscribe(({ message, tempo, spawns }) => {
+
   switch (message) {
     case "gameStarted":
-      newGame();
+      newGame(synth);
       break;
 
     case "playerJumped":
       break;
 
     case "obstacleSpawned":
-      obstacleNote(spawns - 1, tempo)
+      obstacleNote(synth, spawns - 1, tempo)
       break;
 
     case "tempoIncrease":
@@ -33,7 +36,7 @@ app.ports.audioMsg.subscribe(({ message, tempo, spawns }) => {
 
 
     case "gameOver":
-      gameOver();
+      gameOver(synth);
       break;
 
     default:
@@ -43,26 +46,10 @@ app.ports.audioMsg.subscribe(({ message, tempo, spawns }) => {
 });
 
 //setup instruments
-const panner = new Tone.Panner(0).toDestination();
-const synth = initializeGameSynth().connect(panner)
-
-const bass = [
-  "B2", "F#3", "B3",
-  "F3", "C4", "F4",
-  "D3", "A3", "D4",
-  "E3", "A3", "E4"]
-
-function obstacleNote(spawns, tempo) {
-  synth.triggerAttackRelease(
-    bass[spawns % 12],
-    0.3,
-    Tone.now(),
-    Math.min(0.2 * tempo, 0.5));
-}
-
 function initializeGameSynth() {
-  var instrument = new Tone.FMSynth();
-  var synthJSON = {
+  const instrument = new Tone.FMSynth();
+  const panner = new Tone.Panner(0)
+  const synthJSON = {
     "harmonicity": 5,
     "modulationIndex": 10,
     "oscillator": {
@@ -86,17 +73,30 @@ function initializeGameSynth() {
   }
 
   instrument.set(synthJSON);
-
-  instrument.connect(Tone.Destination);
+  instrument.chain(panner, Tone.Destination)
 
 
   return instrument
 }
 
-function newGame() {
+function newGame(synth) {
   synth.triggerAttackRelease("A3", "8n", undefined, 0.2);
 }
 
-function gameOver() {
+function gameOver(synth) {
   synth.triggerAttackRelease("C#2", "16n", Tone.now(), 0.3);
+}
+
+const bass = [
+  "B2", "F#3", "B3",
+  "F3", "C4", "F4",
+  "D3", "A3", "D4",
+  "E3", "A3", "E4"]
+
+function obstacleNote(synth, spawns, tempo) {
+  synth.triggerAttackRelease(
+    bass[spawns % 12],
+    0.3,
+    Tone.now(),
+    Math.min(0.2 * tempo, 0.5));
 }
