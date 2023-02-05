@@ -24,22 +24,25 @@ type alias Obstacle =
     , height : Float
     , hitbox : Hitbox
     , variant : Variant
+    , id : String
     }
 
 
-init : Point -> Variant -> Obstacle
-init point variant =
+init : String -> Point -> Variant -> Obstacle
+init id point variant =
     { position = point
     , width = 25
     , height = 25
     , hitbox = hitbox point 25 25
     , variant = variant
+    , id = id
     }
 
 
-randomObstacle : Point -> Generator Obstacle
-randomObstacle point =
-    Random.map2 init
+randomObstacle : String -> Point -> Generator Obstacle
+randomObstacle id point =
+    Random.map3 init
+        (Random.constant id)
         (Random.constant point)
         (Random.uniform Wall [ TempoIncrease, TempoDecrease ])
 
@@ -53,7 +56,7 @@ update : Float -> Obstacle -> Maybe Obstacle
 update deltaTime obstacle =
     let
         newPosition =
-            Tuple.mapFirst (\x -> x - deltaTime * obstacleSpeed) obstacle.position
+            Tuple.mapFirst (\x -> x - deltaTime * obstacleSpeed * 0.1) obstacle.position
 
         updatedObstacle =
             { obstacle
