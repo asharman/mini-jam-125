@@ -12,6 +12,7 @@ import Json.Decode as Decode exposing (Decoder)
 import Obstacle exposing (Obstacle)
 import Player exposing (Player)
 import Random
+import Types.Buffer as Buffer exposing (Buffer)
 import Types.Canvas exposing (Canvas)
 
 
@@ -72,6 +73,7 @@ type alias Model =
     , config : Config
     , canvas : Canvas
     , tempo : Float
+    , obstacleBuffer : Buffer Obstacle
     }
 
 
@@ -83,6 +85,7 @@ initialModel canvas =
     , config = Config.default
     , canvas = canvas
     , tempo = 1.0
+    , obstacleBuffer = Buffer.empty .id
     }
 
 
@@ -96,16 +99,6 @@ decreaseTempo model =
     { model | tempo = model.tempo * 0.95 }
 
 
-updatePlayer : Float -> Model -> Model
-updatePlayer deltaTime model =
-    { model | player = Player.update model.canvas model.config deltaTime model.player }
-
-
-updateObstacles : Float -> Model -> Model
-updateObstacles deltaTime model =
-    { model | obstacles = List.filterMap (Obstacle.update deltaTime) model.obstacles }
-
-
 incrementTimeElapsed : Float -> Model -> Model
 incrementTimeElapsed deltaTime model =
     case model.state of
@@ -116,9 +109,18 @@ incrementTimeElapsed deltaTime model =
             model
 
 
+collidedWithObstacle : Obstacle -> Model -> Model
+collidedWithObstacle obstacle model =
+    { model | obstacleBuffer = Buffer.insert obstacle model.obstacleBuffer }
+
+
 tick : Float -> Model -> Model
-tick deltaTime =
-    updatePlayer deltaTime >> updateObstacles deltaTime
+tick deltaTime model =
+    { model
+        | player = Player.update model.canvas model.config deltaTime model.player
+        , obstacles = List.filterMap (Obstacle.update deltaTime) model.obstacles
+        , obstacleBuffer = Buffer.update deltaTime model.obstacleBuffer
+    }
 
 
 
@@ -241,7 +243,9 @@ newObstacle canvas config t dt =
     in
     if timeForNewObstacle > 0 then
         Random.generate GeneratedObstacle <|
-            Obstacle.randomObstacle ( canvas.width, canvas.height / 2 )
+            Obstacle.randomObstacle
+                (String.fromInt <| spawnCount (t + dt) config)
+                ( canvas.width, canvas.height / 2 )
 
     else
         Cmd.none
@@ -257,13 +261,13 @@ handleCollision tickFn model obstacle =
 
         Obstacle.TempoIncrease ->
             ( model
-                |> (increaseTempo >> tickFn)
+                |> (collidedWithObstacle obstacle >> increaseTempo >> tickFn)
             , audioEvent "tempoIncrease" model
             )
 
         Obstacle.TempoDecrease ->
             ( model
-                |> (decreaseTempo >> tickFn)
+                |> (collidedWithObstacle obstacle >> decreaseTempo >> tickFn)
             , audioEvent "tempoDecrease" model
             )
 
