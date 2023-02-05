@@ -183,7 +183,7 @@ update msg model =
             case model.state of
                 Menu ->
                     ( { model | state = Playing 0 }
-                    , audioMsg { message = "gameStarted", tempo = model.tempo }
+                    , audioEvent "gameStarted" model
                     )
 
                 Playing _ ->
@@ -191,10 +191,7 @@ update msg model =
                         Space ->
                             if Player.canJump model.player then
                                 ( { model | player = Player.jump model.player }
-                                , audioMsg
-                                    { message = "playerJumped"
-                                    , tempo = model.tempo
-                                    }
+                                , audioEvent "playerJumped" model
                                 )
 
                             else
@@ -212,19 +209,35 @@ update msg model =
 
         GeneratedObstacle obstacle ->
             ( { model | obstacles = obstacle :: model.obstacles }
-            , audioMsg { message = "obstacleSpawned", tempo = model.tempo } )
+            , audioEvent "obstacleSpawned" model
+            )
 
 
 
 -- Helper Functions
 
 
+spawnCount : Float -> Config -> Int
+spawnCount time { obstacleSpawnFrequency } =
+    truncate <| time / obstacleSpawnFrequency
+
+
+audioEvent : String -> Model -> Cmd msg
+audioEvent message model =
+    audioMsg
+        { message = message
+        , tempo = model.tempo
+        , spawns =
+            spawnCount (timeElapsed model.state) model.config
+        }
+
+
 newObstacle : Canvas -> Config -> TimeElapsed -> Float -> Cmd Msg
 newObstacle canvas config t dt =
     let
         timeForNewObstacle =
-            (truncate <| (t + dt) / config.obstacleSpawnFrequency)
-                - (truncate <| t / config.obstacleSpawnFrequency)
+            spawnCount (t + dt) config
+                - spawnCount t config
     in
     if timeForNewObstacle > 0 then
         Random.generate GeneratedObstacle <|
@@ -239,19 +252,19 @@ handleCollision tickFn model obstacle =
     case obstacle.variant of
         Obstacle.Wall ->
             ( { model | state = GameOver (timeElapsed model.state) }
-            , audioMsg { message = "gameOver", tempo = model.tempo }
+            , audioEvent "gameOver" model
             )
 
         Obstacle.TempoIncrease ->
             ( model
                 |> (increaseTempo >> tickFn)
-            , Cmd.none
+            , audioEvent "tempoIncrease" model
             )
 
         Obstacle.TempoDecrease ->
             ( model
                 |> (decreaseTempo >> tickFn)
-            , Cmd.none
+            , audioEvent "tempoDecrease" model
             )
 
 
@@ -360,7 +373,7 @@ viewScore point score =
 -- Program
 
 
-port audioMsg : { message : String, tempo : Float } -> Cmd msg
+port audioMsg : { message : String, tempo : Float, spawns : Int } -> Cmd msg
 
 
 subscriptions : Model -> Sub Msg
