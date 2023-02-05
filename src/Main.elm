@@ -131,7 +131,7 @@ tick deltaTime model =
                 |> Maybe.map (\t -> ( t, Cmd.none ))
                 |> Maybe.withDefault
                     ( Timer.init model.config.obstacleSpawnFrequency
-                    , newObstacle model.canvas (String.fromInt model.spawnCount)
+                    , newObstacle model.canvas model.spawnCount
                     )
     in
     ( { model
@@ -232,9 +232,16 @@ update msg model =
                         ( model, Cmd.none )
 
         GeneratedObstacle obstacle ->
-            ( { model | obstacles = obstacle :: model.obstacles, spawnCount = model.spawnCount + 1 }
-            , audioEvent "obstacleSpawned" model
-            )
+            case obstacle.variant of
+                Obstacle.Rest ->
+                    ( { model | spawnCount = model.spawnCount + 1 }
+                    , audioEvent "obstacleSpawned" model
+                    )
+
+                _ ->
+                    ( { model | obstacles = obstacle :: model.obstacles, spawnCount = model.spawnCount + 1 }
+                    , audioEvent "obstacleSpawned" model
+                    )
 
 
 
@@ -250,10 +257,18 @@ audioEvent message model =
         }
 
 
-newObstacle : Canvas -> String -> Cmd Msg
+newObstacle : Canvas -> Int -> Cmd Msg
 newObstacle canvas id =
-    Random.generate GeneratedObstacle <|
-        Obstacle.randomObstacle id ( canvas.width, canvas.height / 2 )
+    case modBy 2 id of
+        0 ->
+            Random.generate GeneratedObstacle <| Obstacle.new (String.fromInt id) ( canvas.width, canvas.height / 2 ) Obstacle.Wall
+
+        1 ->
+            Random.generate GeneratedObstacle <|
+                Obstacle.randomObstacle (String.fromInt id) ( canvas.width, canvas.height / 2 )
+
+        _ ->
+            Cmd.none
 
 
 handleCollision : (Model -> ( Model, Cmd Msg )) -> Model -> Obstacle -> ( Model, Cmd Msg )
@@ -282,6 +297,16 @@ handleCollision tickFn model obstacle =
             ( tickedModel
                 |> (collidedWithObstacle obstacle >> decreaseTempo)
             , Cmd.batch [ audioEvent "tempoDecrease" model, cmds ]
+            )
+
+        Obstacle.Rest ->
+            let
+                ( tickedModel, _ ) =
+                    tickFn model
+            in
+            ( tickedModel
+                |> collidedWithObstacle obstacle
+            , Cmd.none
             )
 
 
