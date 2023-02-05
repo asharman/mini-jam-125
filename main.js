@@ -75,14 +75,14 @@ function bassNote(spawns, tempo) {
   bassVoice.triggerAttack(
     bass[spawns % 24],
     Tone.now(),
-    Math.min(0.2 * tempo, 0.5));
+    Math.min(0.5 * tempo, 0.8));
 }
 
 function melodyNote(spawns, tempo) {
   melodyVoice.triggerAttack(
     melody[spawns % 24],
     Tone.now(),
-    Math.min(0.2 * tempo, 0.5));
+    Math.min(0.4 * tempo, 0.7));
 }
 
 
