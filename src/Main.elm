@@ -7,13 +7,14 @@ import Canvas.Settings exposing (..)
 import Collision
 import Color
 import Config exposing (Config)
-import Html exposing (Html)
+import Html exposing (Html, del)
 import Json.Decode as Decode exposing (Decoder)
 import Obstacle exposing (Obstacle)
 import Player exposing (Player)
 import Random
 import Types.Buffer as Buffer exposing (Buffer)
 import Types.Canvas exposing (Canvas)
+import Types.Timer as Timer exposing (Timer)
 
 
 
@@ -74,18 +75,26 @@ type alias Model =
     , canvas : Canvas
     , tempo : Float
     , obstacleBuffer : Buffer Obstacle
+    , obstacleSpawnTimer : Timer
+    , spawnCount : Int
     }
 
 
 initialModel : Canvas -> Model
 initialModel canvas =
+    let
+        config =
+            Config.default
+    in
     { player = Player.init ( 50, canvas.height / 2 )
     , obstacles = []
     , state = Menu
-    , config = Config.default
+    , config = config
     , canvas = canvas
     , tempo = 1.0
     , obstacleBuffer = Buffer.empty .id
+    , obstacleSpawnTimer = Timer.init config.obstacleSpawnFrequency
+    , spawnCount = 0
     }
 
 
@@ -114,13 +123,25 @@ collidedWithObstacle obstacle model =
     { model | obstacleBuffer = Buffer.insert obstacle model.obstacleBuffer }
 
 
-tick : Float -> Model -> Model
+tick : Float -> Model -> ( Model, Cmd Msg )
 tick deltaTime model =
-    { model
+    let
+        ( obstacleTimer, cmd ) =
+            Timer.update deltaTime model.obstacleSpawnTimer
+                |> Maybe.map (\t -> ( t, Cmd.none ))
+                |> Maybe.withDefault
+                    ( Timer.init model.config.obstacleSpawnFrequency
+                    , newObstacle model.canvas (String.fromInt model.spawnCount)
+                    )
+    in
+    ( { model
         | player = Player.update model.canvas model.config deltaTime model.player
         , obstacles = List.filterMap (Obstacle.update deltaTime) model.obstacles
         , obstacleBuffer = Buffer.update deltaTime model.obstacleBuffer
-    }
+        , obstacleSpawnTimer = obstacleTimer
+      }
+    , cmd
+    )
 
 
 
@@ -210,7 +231,7 @@ update msg model =
                         ( model, Cmd.none )
 
         GeneratedObstacle obstacle ->
-            ( { model | obstacles = obstacle :: model.obstacles }
+            ( { model | obstacles = obstacle :: model.obstacles, spawnCount = model.spawnCount + 1 }
             , audioEvent "obstacleSpawned" model
             )
 
@@ -219,39 +240,22 @@ update msg model =
 -- Helper Functions
 
 
-spawnCount : Float -> Config -> Int
-spawnCount time { obstacleSpawnFrequency } =
-    truncate <| time / obstacleSpawnFrequency
-
-
 audioEvent : String -> Model -> Cmd msg
 audioEvent message model =
     audioMsg
         { message = message
         , tempo = model.tempo
-        , spawns =
-            spawnCount (timeElapsed model.state) model.config
+        , spawns = model.spawnCount
         }
 
 
-newObstacle : Canvas -> Config -> TimeElapsed -> Float -> Cmd Msg
-newObstacle canvas config t dt =
-    let
-        timeForNewObstacle =
-            spawnCount (t + dt) config
-                - spawnCount t config
-    in
-    if timeForNewObstacle > 0 then
-        Random.generate GeneratedObstacle <|
-            Obstacle.randomObstacle
-                (String.fromInt <| spawnCount (t + dt) config)
-                ( canvas.width, canvas.height / 2 )
-
-    else
-        Cmd.none
+newObstacle : Canvas -> String -> Cmd Msg
+newObstacle canvas id =
+    Random.generate GeneratedObstacle <|
+        Obstacle.randomObstacle id ( canvas.width, canvas.height / 2 )
 
 
-handleCollision : (Model -> Model) -> Model -> Obstacle -> ( Model, Cmd Msg )
+handleCollision : (Model -> ( Model, Cmd Msg )) -> Model -> Obstacle -> ( Model, Cmd Msg )
 handleCollision tickFn model obstacle =
     case obstacle.variant of
         Obstacle.Wall ->
@@ -260,15 +264,23 @@ handleCollision tickFn model obstacle =
             )
 
         Obstacle.TempoIncrease ->
-            ( model
-                |> (collidedWithObstacle obstacle >> increaseTempo >> tickFn)
-            , audioEvent "tempoIncrease" model
+            let
+                ( tickedModel, cmds ) =
+                    tickFn model
+            in
+            ( tickedModel
+                |> (collidedWithObstacle obstacle >> increaseTempo)
+            , Cmd.batch [ audioEvent "tempoIncrease" model, cmds ]
             )
 
         Obstacle.TempoDecrease ->
-            ( model
-                |> (collidedWithObstacle obstacle >> decreaseTempo >> tickFn)
-            , audioEvent "tempoDecrease" model
+            let
+                ( tickedModel, cmds ) =
+                    tickFn model
+            in
+            ( tickedModel
+                |> (collidedWithObstacle obstacle >> decreaseTempo)
+            , Cmd.batch [ audioEvent "tempoDecrease" model, cmds ]
             )
 
 
@@ -282,9 +294,7 @@ processFrame model deltaTime =
         |> List.head
         |> Maybe.map (handleCollision (tick deltaTime) updatedModel)
         |> Maybe.withDefault
-            ( tick deltaTime updatedModel
-            , newObstacle model.canvas model.config (timeElapsed model.state) deltaTime
-            )
+            (tick deltaTime updatedModel)
 
 
 
