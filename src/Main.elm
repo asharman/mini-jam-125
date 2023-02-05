@@ -106,6 +106,16 @@ updateObstacles deltaTime model =
     { model | obstacles = List.filterMap (Obstacle.update deltaTime) model.obstacles }
 
 
+incrementTimeElapsed : Float -> Model -> Model
+incrementTimeElapsed deltaTime model =
+    case model.state of
+        Playing t ->
+            { model | state = Playing (t + deltaTime) }
+
+        _ ->
+            model
+
+
 tick : Float -> Model -> Model
 tick deltaTime =
     updatePlayer deltaTime >> updateObstacles deltaTime
@@ -159,12 +169,12 @@ update msg model =
 
         Frame deltaTime ->
             case model.state of
-                Playing t ->
+                Playing _ ->
                     let
                         scaledWithTempo =
                             deltaTime * model.tempo
                     in
-                    processFrame { model | state = Playing (t + scaledWithTempo) } scaledWithTempo
+                    processFrame model scaledWithTempo
 
                 _ ->
                     ( model, Cmd.none )
@@ -179,12 +189,16 @@ update msg model =
                 Playing _ ->
                     case key of
                         Space ->
-                            ( { model
-                                | player =
-                                    Player.tryJump model.player
-                              }
-                            , Cmd.none
-                            )
+                            if Player.canJump model.player then
+                                ( { model | player = Player.jump model.player }
+                                , audioMsg
+                                    { message = "playerJumped"
+                                    , tempo = model.tempo
+                                    }
+                                )
+
+                            else
+                                ( model, Cmd.none )
 
                         _ ->
                             ( model, Cmd.none )
@@ -197,7 +211,8 @@ update msg model =
                         ( model, Cmd.none )
 
         GeneratedObstacle obstacle ->
-            ( { model | obstacles = obstacle :: model.obstacles }, Cmd.none )
+            ( { model | obstacles = obstacle :: model.obstacles }
+            , audioMsg { message = "obstacleSpawned", tempo = model.tempo } )
 
 
 
@@ -245,12 +260,15 @@ processFrame model deltaTime =
     let
         scaledDeltaTime =
             deltaTime * 0.1
+
+        updatedModel =
+            incrementTimeElapsed deltaTime model
     in
     List.filter (Collision.intersects model.player) model.obstacles
         |> List.head
-        |> Maybe.map (handleCollision (tick scaledDeltaTime) model)
+        |> Maybe.map (handleCollision (tick scaledDeltaTime) updatedModel)
         |> Maybe.withDefault
-            ( tick scaledDeltaTime model
+            ( tick scaledDeltaTime updatedModel
             , newObstacle model.canvas model.config (timeElapsed model.state) deltaTime
             )
 
