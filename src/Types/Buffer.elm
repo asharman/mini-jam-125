@@ -1,26 +1,18 @@
 module Types.Buffer exposing (Buffer, empty, insert, update)
 
 import Dict.Any as AnyDict exposing (AnyDict)
-
-
-type alias Ref =
-    Float
+import Types.Timer as Timer exposing (Timer)
 
 
 type Buffer a
-    = Buffer (AnyDict String a Ref)
+    = Buffer (AnyDict String a Timer)
 
 
 update : Float -> Buffer a -> Buffer a
 update deltaTime (Buffer dict) =
     let
-        updateTimer : a -> Ref -> Maybe Ref
-        updateTimer _ r =
-            if (r - deltaTime) > 0 then
-                Just (r - deltaTime)
-
-            else
-                Nothing
+        updateTimer _ t =
+            Timer.update deltaTime t
     in
     Buffer <| AnyDict.filterMap updateTimer dict
 
@@ -32,4 +24,4 @@ empty toString =
 
 insert : a -> Buffer a -> Buffer a
 insert a (Buffer dict) =
-    Buffer <| AnyDict.insert a 500 dict
+    Buffer <| AnyDict.insert a (Timer.init 500) dict

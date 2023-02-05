@@ -46,7 +46,7 @@ update canvas config deltaTime player =
         newPosition =
             ( xPos
             , max ((canvas.height / 2) - 150) <|
-                (min (canvas.height / 2) <| yPos + (player.velocity * deltaTime))
+                (min (canvas.height / 2) <| yPos + (player.velocity * deltaTime * 0.1))
             )
     in
     { player

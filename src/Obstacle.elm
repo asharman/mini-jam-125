@@ -56,7 +56,7 @@ update : Float -> Obstacle -> Maybe Obstacle
 update deltaTime obstacle =
     let
         newPosition =
-            Tuple.mapFirst (\x -> x - deltaTime * obstacleSpeed) obstacle.position
+            Tuple.mapFirst (\x -> x - deltaTime * obstacleSpeed * 0.1) obstacle.position
 
         updatedObstacle =
             { obstacle

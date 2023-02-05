@@ -275,17 +275,14 @@ handleCollision tickFn model obstacle =
 processFrame : Model -> Float -> ( Model, Cmd Msg )
 processFrame model deltaTime =
     let
-        scaledDeltaTime =
-            deltaTime * 0.1
-
         updatedModel =
             incrementTimeElapsed deltaTime model
     in
     List.filter (Collision.intersects model.player) model.obstacles
         |> List.head
-        |> Maybe.map (handleCollision (tick scaledDeltaTime) updatedModel)
+        |> Maybe.map (handleCollision (tick deltaTime) updatedModel)
         |> Maybe.withDefault
-            ( tick scaledDeltaTime updatedModel
+            ( tick deltaTime updatedModel
             , newObstacle model.canvas model.config (timeElapsed model.state) deltaTime
             )
 
