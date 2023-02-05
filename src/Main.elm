@@ -7,7 +7,7 @@ import Canvas.Settings exposing (..)
 import Collision
 import Color
 import Config exposing (Config)
-import Html exposing (Html, del)
+import Html exposing (Html)
 import Json.Decode as Decode exposing (Decoder)
 import Obstacle exposing (Obstacle)
 import Player exposing (Player)
