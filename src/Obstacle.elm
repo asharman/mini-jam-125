@@ -1,9 +1,10 @@
-module Obstacle exposing (Obstacle, init, update, view)
+module Obstacle exposing (Obstacle, Variant(..), randomObstacle, update, view)
 
 import Canvas exposing (Point, Renderable)
 import Canvas.Settings as Settings
 import Collision exposing (Hitbox(..))
-import Color
+import Color exposing (Color)
+import Random exposing (Generator)
 
 
 obstacleSpeed : number
@@ -11,26 +12,41 @@ obstacleSpeed =
     5
 
 
+type Variant
+    = Wall
+    | TempoIncrease
+    | TempoDecrease
+
+
 type alias Obstacle =
     { position : Point
     , width : Float
     , height : Float
     , hitbox : Hitbox
+    , variant : Variant
     }
 
 
-init : Point -> Obstacle
-init point =
+init : Point -> Variant -> Obstacle
+init point variant =
     { position = point
     , width = 25
     , height = 25
-    , hitbox = hitbox point
+    , hitbox = hitbox point 25 25
+    , variant = variant
     }
 
 
-hitbox : Point -> Hitbox
-hitbox position =
-    Rect (Tuple.mapBoth (\x -> x - 12.5) (\y -> y - 12.5) position) 25 25
+randomObstacle : Point -> Generator Obstacle
+randomObstacle point =
+    Random.map2 init
+        (Random.constant point)
+        (Random.uniform Wall [ TempoIncrease, TempoDecrease ])
+
+
+hitbox : Point -> Float -> Float -> Hitbox
+hitbox position width height =
+    Rect (Tuple.mapBoth (\x -> x - (width / 2)) (\y -> y - (height / 2)) position) width height
 
 
 update : Float -> Obstacle -> Maybe Obstacle
@@ -42,7 +58,7 @@ update deltaTime obstacle =
         updatedObstacle =
             { obstacle
                 | position = newPosition
-                , hitbox = hitbox newPosition
+                , hitbox = hitbox newPosition obstacle.width obstacle.height
             }
     in
     if isObstacleOnscreen updatedObstacle then
@@ -59,17 +75,35 @@ isObstacleOnscreen { position, width } =
 
 view : Obstacle -> Renderable
 view obstacle =
+    case obstacle.variant of
+        Wall ->
+            viewWall obstacle
+
+        TempoIncrease ->
+            viewRect Color.green obstacle
+
+        TempoDecrease ->
+            viewRect Color.yellow obstacle
+
+
+viewRect : Color -> Obstacle -> Renderable
+viewRect color obstacle =
+    Canvas.shapes [ Settings.fill color ]
+        [ Canvas.rect
+            (Tuple.mapBoth
+                (\x -> x - (obstacle.width / 2))
+                (\y -> y - (obstacle.height / 2))
+                obstacle.position
+            )
+            obstacle.width
+            obstacle.height
+        ]
+
+
+viewWall : Obstacle -> Renderable
+viewWall obstacle =
     Canvas.group []
-        [ Canvas.shapes [ Settings.fill Color.white ]
-            [ Canvas.rect
-                (Tuple.mapBoth
-                    (\x -> x - (obstacle.width / 2))
-                    (\y -> y - (obstacle.height / 2))
-                    obstacle.position
-                )
-                25
-                25
-            ]
+        [ viewRect Color.white obstacle
         , Canvas.shapes
             [ Settings.fill Color.red ]
             [ Canvas.circle

@@ -11,6 +11,7 @@ import Html exposing (Html)
 import Json.Decode as Decode exposing (Decoder)
 import Obstacle exposing (Obstacle)
 import Player exposing (Player)
+import Random
 import Types exposing (Canvas)
 
 
@@ -93,6 +94,7 @@ type Msg
     = Frame Float
     | BrowserResized Int Int
     | KeyPress Key
+    | GeneratedObstacle Obstacle
 
 
 init : Decode.Value -> ( Model, Cmd Msg )
@@ -165,12 +167,15 @@ update msg model =
                     else
                         ( model, Cmd.none )
 
+        GeneratedObstacle obstacle ->
+            ( { model | obstacles = obstacle :: model.obstacles }, Cmd.none )
+
 
 
 -- Helper Functions
 
 
-newObstacle : Canvas -> Config -> TimeElapsed -> Float -> Maybe Obstacle
+newObstacle : Canvas -> Config -> TimeElapsed -> Float -> Cmd Msg
 newObstacle canvas config t dt =
     let
         timeForNewObstacle =
@@ -178,10 +183,26 @@ newObstacle canvas config t dt =
                 - (truncate <| t / config.obstacleSpawnFrequency)
     in
     if timeForNewObstacle > 0 then
-        Just <| Obstacle.init ( canvas.width, canvas.height / 2 )
+        Random.generate GeneratedObstacle <|
+            Obstacle.randomObstacle ( canvas.width, canvas.height / 2 )
 
     else
-        Nothing
+        Cmd.none
+
+
+handleCollision : Model -> Obstacle -> ( Model, Cmd Msg )
+handleCollision model obstacle =
+    case obstacle.variant of
+        Obstacle.Wall ->
+            ( { model | state = GameOver (timeElapsed model.state) }
+            , audioMsg { message = "gameOver", tempo = model.tempo }
+            )
+
+        Obstacle.TempoIncrease ->
+            ( { model | tempo = model.tempo * 1.05 }, Cmd.none )
+
+        Obstacle.TempoDecrease ->
+            ( { model | tempo = model.tempo * 0.95 }, Cmd.none )
 
 
 processFrame : Model -> Float -> ( Model, Cmd Msg )
@@ -190,18 +211,6 @@ processFrame model deltaTime =
         scaledDeltaTime =
             deltaTime * 0.1
 
-        maybeNewObstacle =
-            newObstacle model.canvas
-                model.config
-                (timeElapsed model.state)
-                deltaTime
-
-        newObstacles =
-            maybeNewObstacle
-                |> Maybe.map (\o -> o :: model.obstacles)
-                |> Maybe.withDefault model.obstacles
-                |> List.filterMap (Obstacle.update scaledDeltaTime)
-
         newState =
             case model.state of
                 Playing n ->
@@ -209,21 +218,21 @@ processFrame model deltaTime =
 
                 _ ->
                     model.state
-    in
-    if List.any (Collision.intesects model.player) model.obstacles then
-        ( { model | state = GameOver (timeElapsed model.state) }
-        , audioMsg { message = "gameOver", tempo = model.tempo }
-        )
 
-    else
-        ( { model
-            | player = Player.update model.canvas model.config scaledDeltaTime model.player
-            , obstacles = newObstacles
-            , state = newState
-            , tempo = model.tempo + model.config.tempoIncrement
-          }
-        , Cmd.none
-        )
+        updatedModel =
+            { model
+                | player = Player.update model.canvas model.config scaledDeltaTime model.player
+                , obstacles = List.filterMap (Obstacle.update scaledDeltaTime) model.obstacles
+                , state = newState
+            }
+    in
+    List.filter (Collision.intesects model.player) model.obstacles
+        |> List.head
+        |> Maybe.map (handleCollision updatedModel)
+        |> Maybe.withDefault
+            ( { updatedModel | tempo = model.tempo + model.config.tempoIncrement }
+            , newObstacle model.canvas model.config (timeElapsed model.state) deltaTime
+            )
 
 
 
