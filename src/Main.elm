@@ -4,12 +4,15 @@ import Browser
 import Browser.Events exposing (onAnimationFrameDelta, onKeyPress, onResize)
 import Canvas exposing (..)
 import Canvas.Settings exposing (..)
+import Collision
 import Color
 import Config exposing (Config)
-import Html exposing (Html, audio)
+import Html exposing (Html)
 import Json.Decode as Decode exposing (Decoder)
 import Obstacle exposing (Obstacle)
 import Player exposing (Player)
+import Random
+import Types.Canvas exposing (Canvas)
 
 
 
@@ -37,14 +40,6 @@ timeElapsed gameMode =
 
         Menu ->
             0
-
-
-
--- Canvas
-
-
-type alias Canvas =
-    { width : Float, height : Float }
 
 
 
@@ -82,13 +77,38 @@ type alias Model =
 
 initialModel : Canvas -> Model
 initialModel canvas =
-    { player = Player.init
+    { player = Player.init ( 50, canvas.height / 2 )
     , obstacles = []
     , state = Menu
     , config = Config.default
     , canvas = canvas
     , tempo = 1.0
     }
+
+
+increaseTempo : Model -> Model
+increaseTempo model =
+    { model | tempo = model.tempo * 1.05 }
+
+
+decreaseTempo : Model -> Model
+decreaseTempo model =
+    { model | tempo = model.tempo * 0.95 }
+
+
+updatePlayer : Float -> Model -> Model
+updatePlayer deltaTime model =
+    { model | player = Player.update model.canvas model.config deltaTime model.player }
+
+
+updateObstacles : Float -> Model -> Model
+updateObstacles deltaTime model =
+    { model | obstacles = List.filterMap (Obstacle.update deltaTime) model.obstacles }
+
+
+tick : Float -> Model -> Model
+tick deltaTime =
+    updatePlayer deltaTime >> updateObstacles deltaTime
 
 
 
@@ -99,6 +119,7 @@ type Msg
     = Frame Float
     | BrowserResized Int Int
     | KeyPress Key
+    | GeneratedObstacle Obstacle
 
 
 init : Decode.Value -> ( Model, Cmd Msg )
@@ -138,8 +159,12 @@ update msg model =
 
         Frame deltaTime ->
             case model.state of
-                Playing _ ->
-                    processFrame model (deltaTime * model.tempo)
+                Playing t ->
+                    let
+                        scaledWithTempo =
+                            deltaTime * model.tempo
+                    in
+                    processFrame { model | state = Playing (t + scaledWithTempo) } scaledWithTempo
 
                 _ ->
                     ( model, Cmd.none )
@@ -175,12 +200,16 @@ update msg model =
                     else
                         ( model, Cmd.none )
 
+        GeneratedObstacle obstacle ->
+            ( { model | obstacles = obstacle :: model.obstacles }
+            , audioMsg { message = "obstacleSpawned", tempo = model.tempo } )
+
 
 
 -- Helper Functions
 
 
-newObstacle : Canvas -> Config -> TimeElapsed -> Float -> Maybe Obstacle
+newObstacle : Canvas -> Config -> TimeElapsed -> Float -> Cmd Msg
 newObstacle canvas config t dt =
     let
         timeForNewObstacle =
@@ -188,15 +217,32 @@ newObstacle canvas config t dt =
                 - (truncate <| t / config.obstacleSpawnFrequency)
     in
     if timeForNewObstacle > 0 then
-        Just <| Obstacle.init canvas.width
+        Random.generate GeneratedObstacle <|
+            Obstacle.randomObstacle ( canvas.width, canvas.height / 2 )
 
     else
-        Nothing
+        Cmd.none
 
 
-checkCollision : Player -> List Obstacle -> Bool
-checkCollision player obstacles =
-    List.any (Obstacle.intersectsPlayer player.height) obstacles
+handleCollision : (Model -> Model) -> Model -> Obstacle -> ( Model, Cmd Msg )
+handleCollision tickFn model obstacle =
+    case obstacle.variant of
+        Obstacle.Wall ->
+            ( { model | state = GameOver (timeElapsed model.state) }
+            , audioMsg { message = "gameOver", tempo = model.tempo }
+            )
+
+        Obstacle.TempoIncrease ->
+            ( model
+                |> (increaseTempo >> tickFn)
+            , Cmd.none
+            )
+
+        Obstacle.TempoDecrease ->
+            ( model
+                |> (decreaseTempo >> tickFn)
+            , Cmd.none
+            )
 
 
 processFrame : Model -> Float -> ( Model, Cmd Msg )
@@ -204,52 +250,14 @@ processFrame model deltaTime =
     let
         scaledDeltaTime =
             deltaTime * 0.1
-
-        maybeNewObstacle =
-            newObstacle model.canvas
-                model.config
-                (timeElapsed model.state)
-                deltaTime
-
-        newObstacles =
-            maybeNewObstacle
-                |> Maybe.map (\o -> o :: model.obstacles)
-                |> Maybe.withDefault model.obstacles
-                |> List.filterMap (Obstacle.update scaledDeltaTime)
-
-        cmd =
-            maybeNewObstacle
-                |> Maybe.map
-                    (always <|
-                        audioMsg
-                            { message = "obstacleSpawned"
-                            , tempo = model.tempo
-                            }
-                    )
-                |> Maybe.withDefault Cmd.none
-
-        newState =
-            case model.state of
-                Playing n ->
-                    Playing (n + deltaTime)
-
-                _ ->
-                    model.state
     in
-    if checkCollision model.player model.obstacles then
-        ( { model | state = GameOver (timeElapsed model.state) }
-        , audioMsg { message = "gameOver", tempo = model.tempo }
-        )
-
-    else
-        ( { model
-            | player = Player.update model.config scaledDeltaTime model.player
-            , obstacles = newObstacles
-            , state = newState
-            , tempo = model.tempo + model.config.tempoIncrement
-          }
-        , cmd
-        )
+    List.filter (Collision.intersects model.player) model.obstacles
+        |> List.head
+        |> Maybe.map (handleCollision (tick scaledDeltaTime) model)
+        |> Maybe.withDefault
+            ( tick scaledDeltaTime model
+            , newObstacle model.canvas model.config (timeElapsed model.state) deltaTime
+            )
 
 
 
@@ -258,9 +266,7 @@ processFrame model deltaTime =
 
 view : Model -> Html Msg
 view model =
-    Canvas.toHtml ( round model.canvas.width, round model.canvas.height )
-        []
-    <|
+    Canvas.toHtml ( round model.canvas.width, round model.canvas.height ) [] <|
         case model.state of
             Menu ->
                 viewMenu model
@@ -287,9 +293,9 @@ viewMenu model =
     , text [ stroke Color.white ]
         ( canvas.width / 2, canvas.height / 2 - 30 )
         "Press any key to play."
-    , Player.view canvas.height model.player
+    , Player.view model.player
     , Canvas.group [] <|
-        List.map (Obstacle.view canvas.height) model.obstacles
+        List.map Obstacle.view model.obstacles
     ]
 
 
@@ -302,14 +308,10 @@ viewPlaying model =
     [ Canvas.clear ( 0, 0 ) canvas.width canvas.height
     , shapes [ fill Color.black ]
         [ rect ( 0, 0 ) canvas.width canvas.height ]
-    , Player.view
-        canvas.height
-        model.player
+    , Player.view model.player
     , viewScore ( canvas.width / 2, canvas.height / 2 - 40 ) (timeElapsed model.state)
     , Canvas.group [] <|
-        List.map
-            (Obstacle.view canvas.height)
-            model.obstacles
+        List.map Obstacle.view model.obstacles
     ]
 
 
@@ -329,11 +331,9 @@ viewGameOver model =
     , text [ stroke Color.white ]
         ( canvas.width / 2, canvas.height / 2 - 30 )
         "Press any non-space key to continue."
-    , Player.view canvas.height model.player
+    , Player.view model.player
     , Canvas.group [] <|
-        List.map
-            (Obstacle.view canvas.height)
-            model.obstacles
+        List.map Obstacle.view model.obstacles
     ]
 
 
