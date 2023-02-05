@@ -5,7 +5,7 @@ import Canvas.Settings as Settings
 import Collision exposing (Hitbox(..))
 import Color
 import Config exposing (Config)
-import Types exposing (Canvas)
+import Types.Canvas exposing (Canvas)
 
 
 type alias Player =

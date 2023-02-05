@@ -11,8 +11,8 @@ type alias Collides a =
     { a | hitbox : Hitbox }
 
 
-intesects : Collides a -> Collides b -> Bool
-intesects a b =
+intersects : Collides a -> Collides b -> Bool
+intersects a b =
     hitboxIntersection a.hitbox b.hitbox
 
 

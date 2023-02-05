@@ -12,7 +12,7 @@ import Json.Decode as Decode exposing (Decoder)
 import Obstacle exposing (Obstacle)
 import Player exposing (Player)
 import Random
-import Types exposing (Canvas)
+import Types.Canvas exposing (Canvas)
 
 
 
@@ -86,6 +86,31 @@ initialModel canvas =
     }
 
 
+increaseTempo : Model -> Model
+increaseTempo model =
+    { model | tempo = model.tempo * 1.05 }
+
+
+decreaseTempo : Model -> Model
+decreaseTempo model =
+    { model | tempo = model.tempo * 0.95 }
+
+
+updatePlayer : Float -> Model -> Model
+updatePlayer deltaTime model =
+    { model | player = Player.update model.canvas model.config deltaTime model.player }
+
+
+updateObstacles : Float -> Model -> Model
+updateObstacles deltaTime model =
+    { model | obstacles = List.filterMap (Obstacle.update deltaTime) model.obstacles }
+
+
+tick : Float -> Model -> Model
+tick deltaTime =
+    updatePlayer deltaTime >> updateObstacles deltaTime
+
+
 
 -- Msg, Init, Update
 
@@ -134,8 +159,12 @@ update msg model =
 
         Frame deltaTime ->
             case model.state of
-                Playing _ ->
-                    processFrame model (deltaTime * model.tempo)
+                Playing t ->
+                    let
+                        scaledWithTempo =
+                            deltaTime * model.tempo
+                    in
+                    processFrame { model | state = Playing (t + scaledWithTempo) } scaledWithTempo
 
                 _ ->
                     ( model, Cmd.none )
@@ -190,8 +219,8 @@ newObstacle canvas config t dt =
         Cmd.none
 
 
-handleCollision : Model -> Obstacle -> ( Model, Cmd Msg )
-handleCollision model obstacle =
+handleCollision : (Model -> Model) -> Model -> Obstacle -> ( Model, Cmd Msg )
+handleCollision tickFn model obstacle =
     case obstacle.variant of
         Obstacle.Wall ->
             ( { model | state = GameOver (timeElapsed model.state) }
@@ -199,10 +228,16 @@ handleCollision model obstacle =
             )
 
         Obstacle.TempoIncrease ->
-            ( { model | tempo = model.tempo * 1.05 }, Cmd.none )
+            ( model
+                |> (increaseTempo >> tickFn)
+            , Cmd.none
+            )
 
         Obstacle.TempoDecrease ->
-            ( { model | tempo = model.tempo * 0.95 }, Cmd.none )
+            ( model
+                |> (decreaseTempo >> tickFn)
+            , Cmd.none
+            )
 
 
 processFrame : Model -> Float -> ( Model, Cmd Msg )
@@ -210,27 +245,12 @@ processFrame model deltaTime =
     let
         scaledDeltaTime =
             deltaTime * 0.1
-
-        newState =
-            case model.state of
-                Playing n ->
-                    Playing (n + deltaTime)
-
-                _ ->
-                    model.state
-
-        updatedModel =
-            { model
-                | player = Player.update model.canvas model.config scaledDeltaTime model.player
-                , obstacles = List.filterMap (Obstacle.update scaledDeltaTime) model.obstacles
-                , state = newState
-            }
     in
-    List.filter (Collision.intesects model.player) model.obstacles
+    List.filter (Collision.intersects model.player) model.obstacles
         |> List.head
-        |> Maybe.map (handleCollision updatedModel)
+        |> Maybe.map (handleCollision (tick scaledDeltaTime) model)
         |> Maybe.withDefault
-            ( { updatedModel | tempo = model.tempo + model.config.tempoIncrement }
+            ( tick scaledDeltaTime model
             , newObstacle model.canvas model.config (timeElapsed model.state) deltaTime
             )
 

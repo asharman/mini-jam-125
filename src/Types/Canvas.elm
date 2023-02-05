@@ -1,4 +1,4 @@
-module Types exposing (..)
+module Types.Canvas exposing (..)
 
 -- Canvas
 
