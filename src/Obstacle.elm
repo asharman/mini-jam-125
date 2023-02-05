@@ -1,25 +1,49 @@
-module Obstacle exposing (Obstacle, atPlayer, init, intersectsPlayer, update, view)
+module Obstacle exposing (Obstacle, init, update, view)
 
-import Canvas exposing (Renderable)
+import Canvas exposing (Point, Renderable)
 import Canvas.Settings as Settings
+import Collision exposing (Hitbox(..))
 import Color
 
 
+obstacleSpeed : number
+obstacleSpeed =
+    5
+
+
 type alias Obstacle =
-    { position : Float
+    { position : Point
+    , width : Float
+    , height : Float
+    , hitbox : Hitbox
     }
 
 
-init : Float -> Obstacle
-init =
-    Obstacle
+init : Point -> Obstacle
+init point =
+    { position = point
+    , width = 25
+    , height = 25
+    , hitbox = hitbox point
+    }
+
+
+hitbox : Point -> Hitbox
+hitbox position =
+    Rect (Tuple.mapBoth (\x -> x - 12.5) (\y -> y - 12.5) position) 25 25
 
 
 update : Float -> Obstacle -> Maybe Obstacle
 update deltaTime obstacle =
     let
+        newPosition =
+            Tuple.mapFirst (\x -> x - deltaTime * obstacleSpeed) obstacle.position
+
         updatedObstacle =
-            { obstacle | position = obstacle.position - deltaTime * 5 }
+            { obstacle
+                | position = newPosition
+                , hitbox = hitbox newPosition
+            }
     in
     if isObstacleOnscreen updatedObstacle then
         Just updatedObstacle
@@ -29,28 +53,31 @@ update deltaTime obstacle =
 
 
 isObstacleOnscreen : Obstacle -> Bool
-isObstacleOnscreen obstacle =
-    obstacle.position + 25 >= 0
+isObstacleOnscreen { position, width } =
+    Tuple.first position |> (\x -> x + width >= 0)
 
 
-atPlayer : Obstacle -> Bool
-atPlayer obstacle =
-    obstacle.position <= 60 && obstacle.position >= 25
-
-
-intersectsPlayer : Float -> Obstacle -> Bool
-intersectsPlayer playerPos obstacle =
-    atPlayer obstacle
-        && playerPos
-        >= -25
-
-
-view : Float -> Obstacle -> Renderable
-view canvasHeight obstacle =
+view : Obstacle -> Renderable
+view obstacle =
     Canvas.group []
-        [ Canvas.shapes [ Settings.fill Color.white ] [ Canvas.rect ( obstacle.position, (canvasHeight / 2) - 12.5 ) 25 25 ]
+        [ Canvas.shapes [ Settings.fill Color.white ]
+            [ Canvas.rect
+                (Tuple.mapBoth
+                    (\x -> x - (obstacle.width / 2))
+                    (\y -> y - (obstacle.height / 2))
+                    obstacle.position
+                )
+                25
+                25
+            ]
         , Canvas.shapes
             [ Settings.fill Color.red ]
-            [ Canvas.circle ( obstacle.position + 7, canvasHeight / 2 - 3 ) 4
+            [ Canvas.circle
+                (Tuple.mapBoth
+                    (\x -> x - (obstacle.width / 2) + 7)
+                    (\y -> y - 3)
+                    obstacle.position
+                )
+                4
             ]
         ]

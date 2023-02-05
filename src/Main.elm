@@ -4,12 +4,14 @@ import Browser
 import Browser.Events exposing (onAnimationFrameDelta, onKeyPress, onResize)
 import Canvas exposing (..)
 import Canvas.Settings exposing (..)
+import Collision
 import Color
 import Config exposing (Config)
-import Html exposing (Html, audio)
+import Html exposing (Html)
 import Json.Decode as Decode exposing (Decoder)
 import Obstacle exposing (Obstacle)
 import Player exposing (Player)
+import Types exposing (Canvas)
 
 
 
@@ -37,14 +39,6 @@ timeElapsed gameMode =
 
         Menu ->
             0
-
-
-
--- Canvas
-
-
-type alias Canvas =
-    { width : Float, height : Float }
 
 
 
@@ -82,7 +76,7 @@ type alias Model =
 
 initialModel : Canvas -> Model
 initialModel canvas =
-    { player = Player.init
+    { player = Player.init ( 50, canvas.height / 2 )
     , obstacles = []
     , state = Menu
     , config = Config.default
@@ -184,15 +178,10 @@ newObstacle canvas config t dt =
                 - (truncate <| t / config.obstacleSpawnFrequency)
     in
     if timeForNewObstacle > 0 then
-        Just <| Obstacle.init canvas.width
+        Just <| Obstacle.init ( canvas.width, canvas.height / 2 )
 
     else
         Nothing
-
-
-checkCollision : Player -> List Obstacle -> Bool
-checkCollision player obstacles =
-    List.any (Obstacle.intersectsPlayer player.height) obstacles
 
 
 processFrame : Model -> Float -> ( Model, Cmd Msg )
@@ -221,14 +210,14 @@ processFrame model deltaTime =
                 _ ->
                     model.state
     in
-    if checkCollision model.player model.obstacles then
+    if List.any (Collision.intesects model.player) model.obstacles then
         ( { model | state = GameOver (timeElapsed model.state) }
         , audioMsg { message = "gameOver", tempo = model.tempo }
         )
 
     else
         ( { model
-            | player = Player.update model.config scaledDeltaTime model.player
+            | player = Player.update model.canvas model.config scaledDeltaTime model.player
             , obstacles = newObstacles
             , state = newState
             , tempo = model.tempo + model.config.tempoIncrement
@@ -243,9 +232,7 @@ processFrame model deltaTime =
 
 view : Model -> Html Msg
 view model =
-    Canvas.toHtml ( round model.canvas.width, round model.canvas.height )
-        []
-    <|
+    Canvas.toHtml ( round model.canvas.width, round model.canvas.height ) [] <|
         case model.state of
             Menu ->
                 viewMenu model
@@ -272,9 +259,9 @@ viewMenu model =
     , text [ stroke Color.white ]
         ( canvas.width / 2, canvas.height / 2 - 30 )
         "Press any key to play."
-    , Player.view canvas.height model.player
+    , Player.view model.player
     , Canvas.group [] <|
-        List.map (Obstacle.view canvas.height) model.obstacles
+        List.map Obstacle.view model.obstacles
     ]
 
 
@@ -287,14 +274,10 @@ viewPlaying model =
     [ Canvas.clear ( 0, 0 ) canvas.width canvas.height
     , shapes [ fill Color.black ]
         [ rect ( 0, 0 ) canvas.width canvas.height ]
-    , Player.view
-        canvas.height
-        model.player
+    , Player.view model.player
     , viewScore ( canvas.width / 2, canvas.height / 2 - 40 ) (timeElapsed model.state)
     , Canvas.group [] <|
-        List.map
-            (Obstacle.view canvas.height)
-            model.obstacles
+        List.map Obstacle.view model.obstacles
     ]
 
 
@@ -314,11 +297,9 @@ viewGameOver model =
     , text [ stroke Color.white ]
         ( canvas.width / 2, canvas.height / 2 - 30 )
         "Press any non-space key to continue."
-    , Player.view canvas.height model.player
+    , Player.view model.player
     , Canvas.group [] <|
-        List.map
-            (Obstacle.view canvas.height)
-            model.obstacles
+        List.map Obstacle.view model.obstacles
     ]
 
 
