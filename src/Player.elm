@@ -52,7 +52,7 @@ update canvas config deltaTime player =
     { player
         | position = newPosition
         , hitbox = hitbox newPosition
-        , velocity = player.velocity + config.gravity
+        , velocity = player.velocity + (config.gravity * deltaTime * 0.1)
         , state =
             if Tuple.second newPosition == (canvas.height / 2) then
                 Running
@@ -64,7 +64,7 @@ update canvas config deltaTime player =
 
 jump : Player -> Player
 jump player =
-    { player | velocity = -25, state = Jumping }
+    { player | velocity = -40, state = Jumping }
 
 
 canJump : Player -> Bool
