@@ -13,6 +13,7 @@ const app = Elm.Main.init({
 });
 
 app.ports.audioMsg.subscribe(({ message, tempo, spawns }) => {
+  console.log("Spawns", spawns)
   switch (message) {
     case "gameStarted":
       newGame();
@@ -22,7 +23,8 @@ app.ports.audioMsg.subscribe(({ message, tempo, spawns }) => {
       break;
 
     case "obstacleSpawned":
-      obstacleNote(spawns - 1, tempo)
+      nextNote(spawns - 1, tempo)
+      console.log("ObstacleSpawned", spawns - 1)
       break;
 
     case "tempoIncrease":
@@ -43,26 +45,63 @@ app.ports.audioMsg.subscribe(({ message, tempo, spawns }) => {
 });
 
 //setup instruments
-const panner = new Tone.Panner(0).toDestination();
-const synth = initializeGameSynth().connect(panner)
+
+const feedbackDelay = new Tone.FeedbackDelay("4n", 0.3);
+const autoPanner = new Tone.AutoPanner("4n").start();
+const bassVoice = initializeGameSynth()
+const melodyVoice = initializeGameSynth();
+
 
 const bass = [
+  "B2", "F#3", "B3",
+  "F3", "C4", "F4",
+  "B2", "F#3", "B3",
+  "G3", "D4", "G4",
   "B2", "F#3", "B3",
   "F3", "C4", "F4",
   "D3", "A3", "D4",
   "E3", "A3", "E4"]
 
-function obstacleNote(spawns, tempo) {
-  synth.triggerAttackRelease(
-    bass[spawns % 12],
-    0.3,
+
+
+const melody = [
+  "B5", "C#5", "D5",
+  "C5", "C5", "C5",
+  "B5", "C#5", "D5",
+  "E5", "E5", "E5",
+  "B5", "C#5", "D5",
+  "C5", "A5", "A5",
+  "D5", "E5", "F#5",
+  "E5", "D5", "C#5"
+]
+
+function bassNote(spawns, tempo) {
+  bassVoice.triggerAttack(
+    bass[spawns % 24],
     Tone.now(),
     Math.min(0.2 * tempo, 0.5));
 }
 
+function melodyNote(spawns, tempo) {
+  melodyVoice.triggerAttack(
+    melody[spawns % 24],
+    Tone.now(),
+    Math.min(0.2 * tempo, 0.5));
+}
+
+
+
+function nextNote(spawns, tempo) {
+
+  bassNote(spawns, tempo)
+  if (spawns > 23) {
+    melodyNote(spawns, tempo)
+  }
+}
+
 function initializeGameSynth() {
-  var instrument = new Tone.FMSynth();
-  var synthJSON = {
+  const instrument = new Tone.FMSynth();
+  const synthJSON = {
     "harmonicity": 5,
     "modulationIndex": 10,
     "oscillator": {
@@ -71,8 +110,8 @@ function initializeGameSynth() {
     "envelope": {
       "attack": 0.001,
       "decay": 2,
-      "sustain": 0.1,
-      "release": 2
+      "sustain": 0,
+      "release": 1
     },
     "modulation": {
       "type": "square"
@@ -87,16 +126,16 @@ function initializeGameSynth() {
 
   instrument.set(synthJSON);
 
-  instrument.connect(Tone.Destination);
+  instrument.chain(feedbackDelay, autoPanner, Tone.Destination);
 
 
   return instrument
 }
 
 function newGame() {
-  synth.triggerAttackRelease("A3", "8n", undefined, 0.2);
+  bassVoice.triggerAttack("A3", Tone.now(), 0.2);
 }
 
 function gameOver() {
-  synth.triggerAttackRelease("C#2", "16n", Tone.now(), 0.3);
+  bassVoice.triggerAttack("C#2", Tone.now(), 0.3);
 }
