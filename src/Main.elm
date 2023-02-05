@@ -154,20 +154,16 @@ update msg model =
                 Playing _ ->
                     case key of
                         Space ->
-                            let
-                                ( player, cmd ) =
-                                    if Player.canJump model.player then
-                                        ( Player.jump model.player, audioMsg { message = "playerJumped", tempo = model.tempo } )
+                            if Player.canJump model.player then
+                                ( { model | player = Player.jump model.player }
+                                , audioMsg
+                                    { message = "playerJumped"
+                                    , tempo = model.tempo
+                                    }
+                                )
 
-                                    else
-                                        ( model.player, Cmd.none )
-                            in
-                            ( { model
-                                | player =
-                                    player
-                              }
-                            , cmd
-                            )
+                            else
+                                ( model, Cmd.none )
 
                         _ ->
                             ( model, Cmd.none )
@@ -221,6 +217,17 @@ processFrame model deltaTime =
                 |> Maybe.withDefault model.obstacles
                 |> List.filterMap (Obstacle.update scaledDeltaTime)
 
+        cmd =
+            maybeNewObstacle
+                |> Maybe.map
+                    (always <|
+                        audioMsg
+                            { message = "obstacleSpawned"
+                            , tempo = model.tempo
+                            }
+                    )
+                |> Maybe.withDefault Cmd.none
+
         newState =
             case model.state of
                 Playing n ->
@@ -241,7 +248,7 @@ processFrame model deltaTime =
             , state = newState
             , tempo = model.tempo + model.config.tempoIncrement
           }
-        , Cmd.none
+        , cmd
         )
 
 
