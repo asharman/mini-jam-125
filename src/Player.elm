@@ -43,13 +43,14 @@ update config deltaTime player =
     }
 
 
-tryJump : Player -> Player
-tryJump player =
-    if player.state == Running then
-        { player | velocity = -25, state = Jumping }
+jump : Player -> Player
+jump player =
+    { player | velocity = -25, state = Jumping }
 
-    else
-        player
+
+canJump : Player -> Bool
+canJump player =
+    player.state == Running
 
 
 view : Float -> Player -> Renderable

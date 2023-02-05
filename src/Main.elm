@@ -154,11 +154,19 @@ update msg model =
                 Playing _ ->
                     case key of
                         Space ->
+                            let
+                                ( player, cmd ) =
+                                    if Player.canJump model.player then
+                                        ( Player.jump model.player, audioMsg { message = "playerJumped", tempo = model.tempo } )
+
+                                    else
+                                        ( model.player, Cmd.none )
+                            in
                             ( { model
                                 | player =
-                                    Player.tryJump model.player
+                                    player
                               }
-                            , Cmd.none
+                            , cmd
                             )
 
                         _ ->

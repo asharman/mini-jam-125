@@ -21,6 +21,11 @@ app.ports.audioMsg.subscribe(({ message, tempo }) => {
       synth.triggerAttackRelease("C4", "8n");
       break;
 
+    case "playerJumped":
+      synth.triggerAttackRelease("D3", "8n");
+      break;
+
+
     case "gameOver":
       synth.triggerAttackRelease("C2", "8n");
       break;
