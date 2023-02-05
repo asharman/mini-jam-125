@@ -13,7 +13,6 @@ const app = Elm.Main.init({
 });
 
 app.ports.audioMsg.subscribe(({ message, tempo, spawns }) => {
-  console.log("Spawns", spawns)
   switch (message) {
     case "gameStarted":
       newGame();
@@ -52,6 +51,8 @@ const bassVoice = initializeGameSynth()
 const melodyVoice = initializeGameSynth();
 
 
+
+
 const bass = [
   "B2", "F#3", "B3",
   "F3", "C4", "F4",
@@ -61,7 +62,6 @@ const bass = [
   "F3", "C4", "F4",
   "D3", "A3", "D4",
   "E3", "A3", "E4"]
-
 
 
 const melody = [
@@ -86,13 +86,12 @@ function melodyNote(spawns, tempo) {
   melodyVoice.triggerAttack(
     melody[spawns % 24],
     Tone.now(),
-    Math.min(0.2 * tempo, 0.5));
+    Math.min(0.3 * tempo, 0.5));
 }
 
 
 
 function nextNote(spawns, tempo) {
-
   bassNote(spawns, tempo)
   if (spawns > 23) {
     melodyNote(spawns, tempo)
@@ -125,9 +124,10 @@ function initializeGameSynth() {
   }
 
   instrument.set(synthJSON);
-
-  instrument.chain(feedbackDelay, autoPanner, Tone.Destination);
-
+  instrument.chain(
+    feedbackDelay,
+    autoPanner,
+    Tone.Destination);
 
   return instrument
 }
