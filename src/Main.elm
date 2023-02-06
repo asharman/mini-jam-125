@@ -337,7 +337,7 @@ processFrame model deltaTime =
 
 view : Model -> Html Msg
 view model =
-    Html.div [ class "fixed inset-0 w-screen h-screen" ]
+    Html.div [ class "fixed inset-0 w-screen h-screen font-sans" ]
         [ Canvas.toHtml ( round model.canvas.width, round model.canvas.height ) [] <|
             case model.state of
                 Menu ->
@@ -353,8 +353,23 @@ view model =
                 Menu ->
                     viewMenuUi model
 
-                _ ->
-                    Html.div [ class "w-full h-full bg-blue-700" ] []
+                Playing t ->
+                    Html.div [ class "top-0 left-0 text-xl " ]
+                        [ Html.p []
+                            [ Html.text <| "Score: " ++ (t / 1000 |> round |> String.fromInt) ]
+                        ]
+
+                GameOver t ->
+                    Html.div [ class "w-full h-full bg-blue-700 flex flex-col text-white justify-center items-center" ]
+                        [ Html.div [ class "space-y-8" ]
+                            [ Html.p [ class "text-9xl" ] [ Html.text ":(" ]
+                            , Html.div [ class "space-y-4 text-xl" ]
+                                [ Html.p [ class "text-2xl" ] [ Html.text <| "Score: " ++ (t / 1000 |> round |> String.fromInt) ]
+                                , Html.p [] [ Html.text "Oh dear, it looks like you've lost everything" ]
+                                , Html.p [] [ Html.text "Press [Enter] to start again" ]
+                                ]
+                            ]
+                        ]
             ]
         ]
 
@@ -382,7 +397,7 @@ viewMenu model =
 
 viewMenuUi : Model -> Html Msg
 viewMenuUi model =
-    Html.div [ class "text-black font-sans flex flex-col justify-center items-center w-full h-full" ]
+    Html.div [ class "text-black  flex flex-col justify-center items-center w-full h-full" ]
         [ Html.div [ class "bg-white p-4 space-y-6" ]
             [ Html.h1 [ class "text-3xl" ] [ Html.text "Untitled Game" ]
             , Html.div [ class "space-y-3" ]
