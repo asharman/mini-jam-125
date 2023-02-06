@@ -407,7 +407,7 @@ viewMenuUi : Model -> Html Msg
 viewMenuUi model =
     Html.div [ class "text-black  flex flex-col justify-center items-center w-full h-full" ]
         [ Html.div [ class "bg-white p-4 space-y-6" ]
-            [ Html.h1 [ class "text-3xl" ] [ Html.text "Untitled Game" ]
+            [ Html.h1 [ class "text-3xl" ] [ Html.text "JUMPR" ]
             , Html.div [ class "space-y-3" ]
                 [ Html.p [] [ Html.text "Jump over the White blocks to stay alive!" ]
                 , Html.p [] [ Html.text "Press [SPACE] to jump" ]
