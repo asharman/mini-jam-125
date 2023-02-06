@@ -261,11 +261,11 @@ newObstacle : Canvas -> Int -> Cmd Msg
 newObstacle canvas id =
     case modBy 2 id of
         0 ->
-            Random.generate GeneratedObstacle <| Obstacle.new (String.fromInt id) ( canvas.width, canvas.height / 2 ) Obstacle.Wall
+            Random.generate GeneratedObstacle <| Obstacle.new id ( canvas.width, canvas.height / 2 ) Obstacle.Wall
 
         1 ->
             Random.generate GeneratedObstacle <|
-                Obstacle.randomObstacle (String.fromInt id) ( canvas.width, canvas.height / 2 )
+                Obstacle.randomObstacle id ( canvas.width, canvas.height / 2 )
 
         _ ->
             Cmd.none

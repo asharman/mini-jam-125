@@ -40,23 +40,27 @@ init id point variant =
     }
 
 
-new : String -> Point -> Variant -> Generator Obstacle
+new : Int -> Point -> Variant -> Generator Obstacle
 new id point variant =
     Random.map3 init
-        (Random.constant id)
+        (Random.constant <| String.fromInt id)
         (Random.constant point)
         (Random.constant variant)
 
 
-randomObstacle : String -> Point -> Generator Obstacle
-randomObstacle id point =
+randomObstacle : Int -> Point -> Generator Obstacle
+randomObstacle spawnCount point =
+    let
+        restRate =
+            toFloat (max (6 - (spawnCount // 12)) 1)
+    in
     Random.map3 init
-        (Random.constant id)
+        (Random.constant <| String.fromInt spawnCount)
         (Random.constant point)
         (Random.weighted
-            ( 1, Rest )
+            ( restRate, Rest )
             [ ( 3, TempoIncrease )
-            , ( 3, TempoDecrease )
+            , ( 1, TempoDecrease )
             ]
         )
 
