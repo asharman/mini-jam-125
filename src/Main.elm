@@ -362,7 +362,7 @@ view model =
                     viewMenuUi model
 
                 Playing t ->
-                    Html.div [ class "top-0 left-0 text-xl " ]
+                    Html.div [ class "absolute top-1/2 left-0 text-xl py-10 px-3" ]
                         [ Html.p []
                             [ Html.text <| "Score: " ++ (t / 1000 |> round |> String.fromInt) ]
                         ]
