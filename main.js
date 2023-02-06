@@ -15,7 +15,6 @@ const app = Elm.Main.init({
 app.ports.audioMsg.subscribe(({ message, tempo, spawns }) => {
   switch (message) {
     case "gameStarted":
-      // newGame();
       break;
 
     case "playerJumped":
@@ -33,7 +32,6 @@ app.ports.audioMsg.subscribe(({ message, tempo, spawns }) => {
 
 
     case "gameOver":
-      gameOver();
       break;
 
     default:
@@ -127,11 +125,3 @@ function initializeGameSynth() {
 
   return instrument
 }
-
-// function newGame() {
-//   bassVoice.triggerAttack("A3", Tone.now(), 0.2);
-// }
-
-// function gameOver() {
-//   bassVoice.triggerAttack("C#2", Tone.now(), 0.3);
-// }
