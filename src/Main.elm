@@ -8,6 +8,8 @@ import Collision
 import Color
 import Config exposing (Config)
 import Html exposing (Html)
+import Html.Attributes exposing (class)
+import Html.Events
 import Json.Decode as Decode exposing (Decoder)
 import Obstacle exposing (Obstacle)
 import Player exposing (Player)
@@ -77,6 +79,7 @@ type alias Model =
     , obstacleBuffer : Buffer Obstacle
     , obstacleSpawnTimer : Timer
     , spawnCount : Int
+    , audioEnabled : Bool
     }
 
 
@@ -95,6 +98,7 @@ initialModel canvas =
     , obstacleBuffer = Buffer.empty .id
     , obstacleSpawnTimer = Timer.init config.obstacleSpawnFrequency
     , spawnCount = 0
+    , audioEnabled = False
     }
 
 
@@ -154,6 +158,8 @@ type Msg
     | BrowserResized Int Int
     | KeyPress Key
     | GeneratedObstacle Obstacle
+    | EnableAudioClicked
+    | AudioToggled Bool
 
 
 init : Decode.Value -> ( Model, Cmd Msg )
@@ -243,6 +249,12 @@ update msg model =
                     , audioEvent "obstacleSpawned" model
                     )
 
+        EnableAudioClicked ->
+            ( model, enableAudio () )
+
+        AudioToggled bool ->
+            ( { model | audioEnabled = bool }, Cmd.none )
+
 
 
 -- Helper Functions
@@ -325,16 +337,26 @@ processFrame model deltaTime =
 
 view : Model -> Html Msg
 view model =
-    Canvas.toHtml ( round model.canvas.width, round model.canvas.height ) [] <|
-        case model.state of
-            Menu ->
-                viewMenu model
+    Html.div [ class "fixed inset-0 w-screen h-screen" ]
+        [ Canvas.toHtml ( round model.canvas.width, round model.canvas.height ) [] <|
+            case model.state of
+                Menu ->
+                    viewMenu model
 
-            Playing _ ->
-                viewPlaying model
+                Playing _ ->
+                    viewPlaying model
 
-            GameOver _ ->
-                viewGameOver model
+                GameOver _ ->
+                    viewGameOver model
+        , Html.div [ class "absolute inset-0" ]
+            [ case model.state of
+                Menu ->
+                    viewMenuUi model
+
+                _ ->
+                    Html.div [ class "w-full h-full bg-blue-700" ] []
+            ]
+        ]
 
 
 viewMenu : Model -> List Renderable
@@ -356,6 +378,35 @@ viewMenu model =
     , Canvas.group [] <|
         List.map Obstacle.view model.obstacles
     ]
+
+
+viewMenuUi : Model -> Html Msg
+viewMenuUi model =
+    Html.div [ class "text-black font-sans flex flex-col justify-center items-center w-full h-full" ]
+        [ Html.div [ class "bg-white p-4 space-y-6" ]
+            [ Html.h1 [ class "text-3xl" ] [ Html.text "Untitled Game" ]
+            , Html.div [ class "space-y-3" ]
+                [ Html.p [] [ Html.text "Jump over the White blocks to stay alive!" ]
+                , Html.p [] [ Html.text "Press [SPACE] to jump" ]
+                , Html.p [] [ Html.text "Touching Green blocks will increase the game's tempo" ]
+                , Html.p [] [ Html.text "Touching Yellow blocks will decrease the game's tempo" ]
+                ]
+            , Html.div [ class "flex justify-center" ]
+                [ Html.button
+                    [ Html.Events.onClick EnableAudioClicked
+                    , class "bg-blue-500 text-white px-5 py-3 disabled:opacity-60"
+                    , Html.Attributes.disabled model.audioEnabled
+                    ]
+                    [ if model.audioEnabled then
+                        Html.text "Audio Enabled"
+
+                      else
+                        Html.text "Enable Audio"
+                    ]
+                ]
+            , Html.p [ class "text-center" ] [ Html.text "Press Any Key to Start!" ]
+            ]
+        ]
 
 
 viewPlaying : Model -> List Renderable
@@ -409,6 +460,12 @@ viewScore point score =
 port audioMsg : { message : String, tempo : Float, spawns : Int } -> Cmd msg
 
 
+port enableAudio : () -> Cmd msg
+
+
+port audioEnabled : (Bool -> msg) -> Sub msg
+
+
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
@@ -416,6 +473,7 @@ subscriptions _ =
         , onResize BrowserResized
         , onKeyPress
             (Decode.map (KeyPress << fromString) (Decode.field "key" Decode.string))
+        , audioEnabled AudioToggled
         ]
 
 
