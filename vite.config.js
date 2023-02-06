@@ -3,5 +3,6 @@ import plugin from "vite-plugin-elm";
 
 export default defineConfig({
   plugins: [plugin()],
+  base: "./",
   build: { outDir: "./dist" },
 });
