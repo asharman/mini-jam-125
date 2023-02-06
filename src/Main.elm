@@ -52,6 +52,7 @@ timeElapsed gameMode =
 
 type Key
     = Space
+    | Enter
     | Other
 
 
@@ -60,6 +61,9 @@ fromString string =
     case String.toLower string of
         " " ->
             Space
+
+        "enter" ->
+            Enter
 
         _ ->
             Other
@@ -231,8 +235,12 @@ update msg model =
                             ( model, Cmd.none )
 
                 GameOver _ ->
-                    if key /= Space then
-                        ( initialModel model.canvas, Cmd.none )
+                    let
+                        newModel =
+                            initialModel model.canvas
+                    in
+                    if key == Enter then
+                        ( { newModel | audioEnabled = model.audioEnabled }, Cmd.none )
 
                     else
                         ( model, Cmd.none )
@@ -347,7 +355,7 @@ view model =
                     viewPlaying model
 
                 GameOver _ ->
-                    viewGameOver model
+                    []
         , Html.div [ class "absolute inset-0" ]
             [ case model.state of
                 Menu ->
@@ -434,38 +442,9 @@ viewPlaying model =
     , shapes [ fill Color.black ]
         [ rect ( 0, 0 ) canvas.width canvas.height ]
     , Player.view model.player
-    , viewScore ( canvas.width / 2, canvas.height / 2 - 40 ) (timeElapsed model.state)
     , Canvas.group [] <|
         List.map Obstacle.view model.obstacles
     ]
-
-
-viewGameOver : Model -> List Renderable
-viewGameOver model =
-    let
-        canvas =
-            model.canvas
-    in
-    [ Canvas.clear ( 0, 0 ) canvas.width canvas.height
-    , shapes [ fill Color.black ]
-        [ rect ( 0, 0 ) canvas.width canvas.height ]
-    , text [ stroke Color.white ]
-        ( canvas.width / 2, canvas.height / 2 - 50 )
-        "You died!"
-    , viewScore ( canvas.width / 2, canvas.height / 2 - 40 ) (timeElapsed model.state)
-    , text [ stroke Color.white ]
-        ( canvas.width / 2, canvas.height / 2 - 30 )
-        "Press any non-space key to continue."
-    , Player.view model.player
-    , Canvas.group [] <|
-        List.map Obstacle.view model.obstacles
-    ]
-
-
-viewScore : Point -> TimeElapsed -> Renderable
-viewScore point score =
-    text [ stroke Color.white ] point <|
-        ("Score: " ++ String.fromInt (truncate ((score * score) * 0.5)))
 
 
 
