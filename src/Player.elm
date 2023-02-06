@@ -22,6 +22,11 @@ type PlayerState
     | Jumping
 
 
+jumpImpulse : Float
+jumpImpulse =
+    -35
+
+
 init : Point -> Player
 init point =
     { position = point
@@ -45,7 +50,7 @@ update canvas config deltaTime player =
 
         newPosition =
             ( xPos
-            , max ((canvas.height / 2) - 150) <|
+            , max ((canvas.height / 2) - 75) <|
                 (min (canvas.height / 2) <| yPos + (player.velocity * deltaTime * 0.1))
             )
     in
@@ -64,7 +69,7 @@ update canvas config deltaTime player =
 
 jump : Player -> Player
 jump player =
-    { player | velocity = -40, state = Jumping }
+    { player | velocity = jumpImpulse, state = Jumping }
 
 
 canJump : Player -> Bool

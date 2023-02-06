@@ -1,4 +1,4 @@
-module Obstacle exposing (Obstacle, Variant(..), randomObstacle, update, view)
+module Obstacle exposing (Obstacle, Variant(..), new, randomObstacle, update, view)
 
 import Canvas exposing (Point, Renderable)
 import Canvas.Settings as Settings
@@ -16,6 +16,7 @@ type Variant
     = Wall
     | TempoIncrease
     | TempoDecrease
+    | Rest
 
 
 type alias Obstacle =
@@ -39,12 +40,29 @@ init id point variant =
     }
 
 
-randomObstacle : String -> Point -> Generator Obstacle
-randomObstacle id point =
+new : Int -> Point -> Variant -> Generator Obstacle
+new id point variant =
     Random.map3 init
-        (Random.constant id)
+        (Random.constant <| String.fromInt id)
         (Random.constant point)
-        (Random.uniform Wall [ TempoIncrease, TempoDecrease ])
+        (Random.constant variant)
+
+
+randomObstacle : Int -> Point -> Generator Obstacle
+randomObstacle spawnCount point =
+    let
+        restRate =
+            toFloat (max (6 - (spawnCount // 12)) 1)
+    in
+    Random.map3 init
+        (Random.constant <| String.fromInt spawnCount)
+        (Random.constant point)
+        (Random.weighted
+            ( restRate, Rest )
+            [ ( 3, TempoIncrease )
+            , ( 1, TempoDecrease )
+            ]
+        )
 
 
 hitbox : Point -> Float -> Float -> Hitbox
@@ -87,6 +105,9 @@ view obstacle =
 
         TempoDecrease ->
             viewRect Color.yellow obstacle
+
+        Rest ->
+            viewRect Color.black obstacle
 
 
 viewRect : Color -> Obstacle -> Renderable
