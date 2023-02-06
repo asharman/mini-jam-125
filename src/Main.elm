@@ -100,12 +100,12 @@ initialModel canvas =
 
 increaseTempo : Model -> Model
 increaseTempo model =
-    { model | tempo = model.tempo * 1.05 }
+    { model | tempo = model.tempo * 1.02 }
 
 
 decreaseTempo : Model -> Model
 decreaseTempo model =
-    { model | tempo = model.tempo * 0.95 }
+    { model | tempo = model.tempo * 0.98 }
 
 
 incrementTimeElapsed : Float -> Model -> Model
