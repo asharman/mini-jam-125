@@ -8,6 +8,8 @@ import Collision
 import Color
 import Config exposing (Config)
 import Html exposing (Html)
+import Html.Attributes exposing (class)
+import Html.Events
 import Json.Decode as Decode exposing (Decoder)
 import Obstacle exposing (Obstacle)
 import Player exposing (Player)
@@ -50,6 +52,7 @@ timeElapsed gameMode =
 
 type Key
     = Space
+    | Enter
     | Other
 
 
@@ -58,6 +61,9 @@ fromString string =
     case String.toLower string of
         " " ->
             Space
+
+        "enter" ->
+            Enter
 
         _ ->
             Other
@@ -77,6 +83,7 @@ type alias Model =
     , obstacleBuffer : Buffer Obstacle
     , obstacleSpawnTimer : Timer
     , spawnCount : Int
+    , audioEnabled : Bool
     }
 
 
@@ -95,6 +102,7 @@ initialModel canvas =
     , obstacleBuffer = Buffer.empty .id
     , obstacleSpawnTimer = Timer.init config.obstacleSpawnFrequency
     , spawnCount = 0
+    , audioEnabled = False
     }
 
 
@@ -154,6 +162,8 @@ type Msg
     | BrowserResized Int Int
     | KeyPress Key
     | GeneratedObstacle Obstacle
+    | EnableAudioClicked
+    | AudioToggled Bool
 
 
 init : Decode.Value -> ( Model, Cmd Msg )
@@ -225,8 +235,12 @@ update msg model =
                             ( model, Cmd.none )
 
                 GameOver _ ->
-                    if key /= Space then
-                        ( initialModel model.canvas, Cmd.none )
+                    let
+                        newModel =
+                            initialModel model.canvas
+                    in
+                    if key == Enter then
+                        ( { newModel | audioEnabled = model.audioEnabled }, Cmd.none )
 
                     else
                         ( model, Cmd.none )
@@ -242,6 +256,12 @@ update msg model =
                     ( { model | obstacles = obstacle :: model.obstacles, spawnCount = model.spawnCount + 1 }
                     , audioEvent "obstacleSpawned" model
                     )
+
+        EnableAudioClicked ->
+            ( model, enableAudio () )
+
+        AudioToggled bool ->
+            ( { model | audioEnabled = bool }, Cmd.none )
 
 
 
@@ -325,16 +345,41 @@ processFrame model deltaTime =
 
 view : Model -> Html Msg
 view model =
-    Canvas.toHtml ( round model.canvas.width, round model.canvas.height ) [] <|
-        case model.state of
-            Menu ->
-                viewMenu model
+    Html.div [ class "fixed inset-0 w-screen h-screen font-sans" ]
+        [ Canvas.toHtml ( round model.canvas.width, round model.canvas.height ) [] <|
+            case model.state of
+                Menu ->
+                    viewMenu model
 
-            Playing _ ->
-                viewPlaying model
+                Playing _ ->
+                    viewPlaying model
 
-            GameOver _ ->
-                viewGameOver model
+                GameOver _ ->
+                    []
+        , Html.div [ class "absolute inset-0" ]
+            [ case model.state of
+                Menu ->
+                    viewMenuUi model
+
+                Playing t ->
+                    Html.div [ class "absolute top-1/2 left-0 text-xl py-10 px-3" ]
+                        [ Html.p []
+                            [ Html.text <| "Score: " ++ (t / 1000 |> round |> String.fromInt) ]
+                        ]
+
+                GameOver t ->
+                    Html.div [ class "w-full h-full bg-blue-700 flex flex-col text-white justify-center items-center" ]
+                        [ Html.div [ class "space-y-8" ]
+                            [ Html.p [ class "text-9xl" ] [ Html.text ":(" ]
+                            , Html.div [ class "space-y-4 text-xl" ]
+                                [ Html.p [ class "text-2xl" ] [ Html.text <| "Score: " ++ (t / 1000 |> round |> String.fromInt) ]
+                                , Html.p [] [ Html.text "Oh dear, it looks like you've lost everything" ]
+                                , Html.p [] [ Html.text "Press [Enter] to start again" ]
+                                ]
+                            ]
+                        ]
+            ]
+        ]
 
 
 viewMenu : Model -> List Renderable
@@ -358,6 +403,35 @@ viewMenu model =
     ]
 
 
+viewMenuUi : Model -> Html Msg
+viewMenuUi model =
+    Html.div [ class "text-black  flex flex-col justify-center items-center w-full h-full" ]
+        [ Html.div [ class "bg-white p-4 space-y-6" ]
+            [ Html.h1 [ class "text-3xl" ] [ Html.text "Untitled Game" ]
+            , Html.div [ class "space-y-3" ]
+                [ Html.p [] [ Html.text "Jump over the White blocks to stay alive!" ]
+                , Html.p [] [ Html.text "Press [SPACE] to jump" ]
+                , Html.p [] [ Html.text "Touching Green blocks will increase the game's tempo" ]
+                , Html.p [] [ Html.text "Touching Yellow blocks will decrease the game's tempo" ]
+                ]
+            , Html.div [ class "flex justify-center" ]
+                [ Html.button
+                    [ Html.Events.onClick EnableAudioClicked
+                    , class "bg-blue-500 text-white px-5 py-3 disabled:opacity-60"
+                    , Html.Attributes.disabled model.audioEnabled
+                    ]
+                    [ if model.audioEnabled then
+                        Html.text "Audio Enabled"
+
+                      else
+                        Html.text "Enable Audio"
+                    ]
+                ]
+            , Html.p [ class "text-center" ] [ Html.text "Press Any Key to Start!" ]
+            ]
+        ]
+
+
 viewPlaying : Model -> List Renderable
 viewPlaying model =
     let
@@ -368,38 +442,9 @@ viewPlaying model =
     , shapes [ fill Color.black ]
         [ rect ( 0, 0 ) canvas.width canvas.height ]
     , Player.view model.player
-    , viewScore ( canvas.width / 2, canvas.height / 2 - 40 ) (timeElapsed model.state)
     , Canvas.group [] <|
         List.map Obstacle.view model.obstacles
     ]
-
-
-viewGameOver : Model -> List Renderable
-viewGameOver model =
-    let
-        canvas =
-            model.canvas
-    in
-    [ Canvas.clear ( 0, 0 ) canvas.width canvas.height
-    , shapes [ fill Color.black ]
-        [ rect ( 0, 0 ) canvas.width canvas.height ]
-    , text [ stroke Color.white ]
-        ( canvas.width / 2, canvas.height / 2 - 50 )
-        "You died!"
-    , viewScore ( canvas.width / 2, canvas.height / 2 - 40 ) (timeElapsed model.state)
-    , text [ stroke Color.white ]
-        ( canvas.width / 2, canvas.height / 2 - 30 )
-        "Press any non-space key to continue."
-    , Player.view model.player
-    , Canvas.group [] <|
-        List.map Obstacle.view model.obstacles
-    ]
-
-
-viewScore : Point -> TimeElapsed -> Renderable
-viewScore point score =
-    text [ stroke Color.white ] point <|
-        ("Score: " ++ String.fromInt (truncate ((score * score) * 0.5)))
 
 
 
@@ -409,6 +454,12 @@ viewScore point score =
 port audioMsg : { message : String, tempo : Float, spawns : Int } -> Cmd msg
 
 
+port enableAudio : () -> Cmd msg
+
+
+port audioEnabled : (Bool -> msg) -> Sub msg
+
+
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
@@ -416,6 +467,7 @@ subscriptions _ =
         , onResize BrowserResized
         , onKeyPress
             (Decode.map (KeyPress << fromString) (Decode.field "key" Decode.string))
+        , audioEnabled AudioToggled
         ]
 
 
