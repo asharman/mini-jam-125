@@ -1,5 +1,7 @@
 # README
 
+Deployed at https://aamidal.itch.io/jumpr
+
 ## prereqs
 
 - Install software dependencies using ASDF (see .tool-versions file)\
